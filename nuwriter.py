@@ -1,8 +1,7 @@
-# SPDX-License-Identifier: Apache-2.0
 # NOTE: This script is test under Python 3.x
 
-__copyright__ = "Copyright (C) 2020 Nuvoton Technology Corp. All rights reserved"
-__version__ = "v0.35"
+__copyright__ = "Copyright (C) 2020~2021 Nuvoton Technology Corp. All rights reserved"
+__version__ = "v0.36"
 
 import os
 import sys
@@ -23,6 +22,7 @@ from UnpackImage import UnpackImage
 from collections import namedtuple
 from struct import unpack
 import time
+import platform
 # for debug
 import usb.core
 import usb.util
@@ -58,7 +58,8 @@ OPT_EXECUTE = 2     # For write
 OPT_VERIFY = 3      # For write
 OPT_UNPACK = 4      # For pack
 OPT_RAW = 5         # For write
-OPT_EJECT = 6      # For msc
+OPT_EJECT = 6       # For msc
+OPT_STUFF = 7       # For stuff pack
 
 # OPT block definitions
 OPT_OTPBLK1 = 0x100
@@ -83,6 +84,8 @@ IMG_DTB = 6
 # devices = []
 mp_mode = False
 
+WINDOWS_PATH = "C:\\Program Files (x86)\\Nuvoton Tools\\NuWriter\\"
+LINUX_PATH = "/usr/share/nuwriter/"
 
 def conv_env(env_file_name, blk_size) -> bytearray:
 
@@ -162,7 +165,7 @@ def conv_otp(opt_file_name) -> (bytearray, int):
                     if d['boot_cfg']['posotp'] == 'enable':
                         cfg_val |= 1
                 if sub_key == 'qspiclk':
-                    if d['boot_cfg']['qspiclk'] == '50mhz':
+                    if d['boot_cfg']['qspiclk'] == '60mhz':
                         cfg_val |= 2
                 if sub_key == 'wdt0en':
                     if d['boot_cfg']['wdt0en'] == 'enable':
@@ -199,7 +202,7 @@ def conv_otp(opt_file_name) -> (bytearray, int):
                         cfg_val |= 0x4000
                     elif d['boot_cfg']['option'] == 't24' or d['boot_cfg']['option'] == 'spinor1':
                         cfg_val |= 0x8000
-                    elif d['boot_cfg']['option'] == 'noecc' or d['boot_cfg']['option'] == 'spinor4':
+                    elif d['boot_cfg']['option'] == 'ignore' or d['boot_cfg']['option'] == 'spinor4':
                         cfg_val |= 0xC000
                 if sub_key == 'secboot':
                     if d['boot_cfg']['secboot'] == 'disable':
@@ -329,12 +332,16 @@ def __img_erase(dev, media, start, length, option) -> int:
     if int.from_bytes(ack, byteorder="little") != ACK:
         print("Receive ACK error")
         return -1
-    bar = tqdm(total=length, position=dev.get_id(), ascii=True)
+    bar = tqdm(total=100, position=dev.get_id(), ascii=True)
+    previous_progress = 0
     while True:
+        # xusb ack with total erase progress.
         ack = dev.read(4)
-        if (int.from_bytes(ack, byteorder="little") >> 16) & 0xFFFF:
+        if int.from_bytes(ack, byteorder="little") <= 100:
+            bar.update(int.from_bytes(ack, byteorder="little") - previous_progress)
+            previous_progress = int.from_bytes(ack, byteorder="little")
+        if int.from_bytes(ack, byteorder="little") == 100:
             break
-        bar.update(int.from_bytes(ack, byteorder="little") & 0xFFFF)
     bar.close()
     return 0
 
@@ -346,6 +353,7 @@ def do_img_erase(media, start, length=0, option=OPT_NONE) -> None:
     # devices = XUsbComList(attach_all=mp_mode).get_dev()
     _XUsbComList = XUsbComList(attach_all=mp_mode)
     devices = _XUsbComList.get_dev()
+
     if len(devices) == 0:
         print("Device not found")
         sys.exit(2)
@@ -415,6 +423,7 @@ def do_otp_program(opt_file_name) -> None:
     # devices = XUsbComList(attach_all=mp_mode).get_dev()
     _XUsbComList = XUsbComList(attach_all=mp_mode)
     devices = _XUsbComList.get_dev()
+
     if len(devices) == 0:
         print("Device not found")
         sys.exit(2)
@@ -485,6 +494,7 @@ def __pack_program(dev, media, pack_image, option) -> int:
         bar.close()
         dev.read(4)
         if option == OPT_VERIFY:
+            dev.set_media(media)
             cmd = img_start.to_bytes(8, byteorder='little')
             cmd += img_length.to_bytes(8, byteorder='little')
             cmd += ACT_READ.to_bytes(4, byteorder='little')
@@ -499,11 +509,20 @@ def __pack_program(dev, media, pack_image, option) -> int:
             text = f"Verifying {i}/{image_cnt}"
             bar = tqdm(total=img_length, position=dev.get_id(), ascii=True, desc=text)
             while remain > 0:
-                xfer_size = TRANSFER_SIZE if remain > TRANSFER_SIZE else remain
+                ack = dev.read(4)
+                # Get the transfer length of next read
+                xfer_size = int.from_bytes(ack, byteorder="little")
+
                 data = dev.read(xfer_size)
-                dev.write(xfer_size)  # ack
+                dev.write(xfer_size.to_bytes(4, byteorder='little'))
                 offset = img_length - remain
-                if data != pack_image.img_content(i, offset, xfer_size):
+
+                # For SD/eMMC
+                if xfer_size > remain:
+                    xfer_size = remain
+                    data = data[0: remain]
+
+                if data != bytearray(pack_image.img_content(i, offset, xfer_size)):
                     print("Verify failed")
                     return -1
                 remain -= xfer_size
@@ -518,6 +537,7 @@ def do_pack_program(media, pack_file_name, option=OPT_NONE) -> None:
     # devices = XUsbComList(attach_all=mp_mode).get_dev()
     _XUsbComList = XUsbComList(attach_all=mp_mode)
     devices = _XUsbComList.get_dev()
+
     if len(devices) == 0:
         print("Device not found")
         sys.exit(2)
@@ -583,6 +603,7 @@ def __img_program(dev, media, start, img_data, option) -> int:
     dev.read(4)
     bar.close()
     if option == OPT_VERIFY:
+        dev.set_media(media)
         cmd = start.to_bytes(8, byteorder='little')
         cmd += img_length.to_bytes(8, byteorder='little')
         cmd += ACT_READ.to_bytes(4, byteorder='little')
@@ -597,11 +618,20 @@ def __img_program(dev, media, start, img_data, option) -> int:
         remain = img_length
         bar = tqdm(total=img_length, position=dev.get_id(), ascii=True, desc="Verifying")
         while remain > 0:
-            xfer_size = TRANSFER_SIZE if remain > TRANSFER_SIZE else remain
+            ack = dev.read(4)
+            # Get the transfer length of next read
+            xfer_size = int.from_bytes(ack, byteorder="little")
+
             data = dev.read(xfer_size)
-            dev.write(xfer_size.to_bytes(4, byteorder='little'))  # ack
+            dev.write(xfer_size.to_bytes(4, byteorder='little'))    #ack
             offset = img_length - remain
-            if data != img_data[offset: offset + xfer_size]:
+
+            # For SD/eMMC
+            if xfer_size > remain:
+                xfer_size = remain
+                data = data[0: remain]
+
+            if data != bytearray(img_data[offset: offset + xfer_size]):
                 print("Verify failed")
                 return -1
             remain -= xfer_size
@@ -617,6 +647,7 @@ def do_img_program(media, start, image_file_name, option=OPT_NONE) -> None:
     # devices = XUsbComList(attach_all=mp_mode).get_dev()
     _XUsbComList = XUsbComList(attach_all=mp_mode)
     devices = _XUsbComList.get_dev()
+
     if len(devices) == 0:
         print("Device not found")
         sys.exit(2)
@@ -648,6 +679,7 @@ def do_img_read(media, start, out_file_name, length=0x1, option=OPT_NONE) -> Non
     # devices = XUsbComList(attach_all=False).get_dev()
     _XUsbComList = XUsbComList(attach_all=False)
     devices = _XUsbComList.get_dev()
+
     if len(devices) == 0:
         print("Device not found")
         sys.exit(2)
@@ -665,20 +697,23 @@ def do_img_read(media, start, out_file_name, length=0x1, option=OPT_NONE) -> Non
     if int.from_bytes(ack, byteorder="little") != ACK:
         print("Receive ACK error")
         return -1
-
+    # FIXME: Don't know real length for "read all"
     bar = tqdm(total=length, ascii=True)
     data = b''
     remain = length
 
     while remain > 0:
-        xfer_size = TRANSFER_SIZE if remain > TRANSFER_SIZE else remain
+        ack = dev.read(4)
+        # Get the transfer length of next read
+        xfer_size = int.from_bytes(ack, byteorder="little")
+
         data += dev.read(xfer_size)
         dev.write(xfer_size.to_bytes(4, byteorder='little'))    # ack
         remain -= xfer_size
         bar.update(xfer_size)
     try:
         with open(out_file_name, "wb") as out_file:
-            out_file.write(data)
+            out_file.write(data[0:length])
     except (IOError, OSError) as err:
         print(f"Open {out_file_name} failed")
         sys.exit(err)
@@ -773,16 +808,43 @@ def __get_info(dev) -> int:
     return 0
 
 
-# def do_attach(ini_file_name, mp_mode=False):
 def do_attach(ini_file_name, mp_mode1=False) -> None:
+    init_location = "missing"
+    if os.path.exists(ini_file_name):  # default use the init file in current directory
+        init_location = ini_file_name
+    else:
+        if platform.system() == 'Windows':
+            if os.path.exists(WINDOWS_PATH + "ddrimg\\" + ini_file_name):
+                init_location = WINDOWS_PATH + "ddrimg\\" + ini_file_name
+        elif platform.system() == 'Linux':
+            if os.path.exists(LINUX_PATH + "ddrimg/" + ini_file_name):
+                init_location = LINUX_PATH + "ddrimg/" + ini_file_name
+
+    if init_location == "missing":
+        print(f"Cannot find {ini_file_name}")
+        sys.exit(3)
     try:
-        with open(ini_file_name, "rb") as ini_file:
+        with open(init_location, "rb") as ini_file:
             ini_data = ini_file.read()
     except (IOError, OSError) as err:
         print(f"Open {ini_file_name} failed")
         sys.exit(err)
+    xusb_location = "missing"
+    if os.path.exists("xusb.bin"):  # default use the xusb.bin in current directory
+        xusb_location = "xusb.bin"
+    else:
+        if platform.system() == 'Windows':
+            if os.path.exists(WINDOWS_PATH + "xusb.bin"):
+                xusb_location = WINDOWS_PATH + "xusb.bin"
+        elif platform.system() == 'Linux':
+            if os.path.exists(LINUX_PATH + "xusb.bin"):
+                xusb_location = LINUX_PATH + "xusb.bin"
+    if xusb_location == "missing":
+        print("Cannot find xusb.bin")
+        sys.exit(3)
+
     try:
-        with open("xusb.bin", "rb") as xusb_file:
+        with open(xusb_location, "rb") as xusb_file:
             xusb_data = xusb_file.read()
     except (IOError, OSError) as err:
         print("Open xusb.bin failed")
@@ -791,6 +853,7 @@ def do_attach(ini_file_name, mp_mode1=False) -> None:
     # devices = XUsbComList(attach_all=mp_mode1).get_dev()
     _XUsbComList = XUsbComList(attach_all=mp_mode1)
     devices = _XUsbComList.get_dev()
+
     if len(devices) == 0:
         print("Device not found")
         sys.exit(2)
@@ -823,6 +886,7 @@ def do_attach(ini_file_name, mp_mode1=False) -> None:
     # devices = XUsbComList(attach_all=mp_mode1).get_dev()
     _XUsbComListNew = XUsbComList(attach_all=mp_mode1)
     devices = _XUsbComListNew.get_dev()
+
     if len(devices) == 0:
         print("Device not found")
         sys.exit(2)
@@ -868,6 +932,59 @@ def do_unpack(pack_file_name) -> None:
     except (IOError, OSError):
         print("Create symbolic folder unpack failed")
     print("Unpack images to directory {} complete".format(now.strftime("%m%d-%H%M%S%f")))
+
+
+def do_stuff(cfg_file) -> None:
+    now = datetime.now()
+
+    try:
+        with open(cfg_file, "r") as json_file:
+            try:
+                d = json.load(json_file)
+            except json.decoder.JSONDecodeError as err:
+                print(f"{cfg_file} parsing error")
+                sys.exit(err)
+    except (IOError, OSError) as err:
+        print(f"Open {cfg_file} failed")
+        sys.exit(err)
+
+    try:
+        os.mkdir(now.strftime("%m%d-%H%M%S%f"))
+        pack_file = open(now.strftime("%m%d-%H%M%S%f") + "/pack.bin", "wb")
+    except (IOError, OSError) as err:
+        sys.exit(err)
+
+    offset = 0
+    out = bytearray()
+
+    # Start stuffing image
+    for img in d["image"]:
+        try:
+            with open(img["file"], "rb") as img_file:
+                data = img_file.read()
+        except (IOError, OSError) as err:
+            print(f"Open {img_file} failed")
+            shutil.rmtree(now.strftime("%m%d-%H%M%S%f"))
+            sys.exit(err)
+        if int(img["offset"], 0) < offset:
+            print(f"Please place the files in {cfg_file} based on the ascending offset")
+            sys.exit(4)
+        elif int(img["offset"], 0) > offset:
+            out += b'\xFF' * (int(img["offset"], 0) - offset)
+            offset = int(img["offset"], 0)
+        out += data
+        offset += len(data)
+    pack_file.write(out)
+    pack_file.close()
+    try:
+        os.unlink("pack")
+    except (IOError, OSError):
+        pass
+    try:
+        os.symlink(now.strftime("%m%d-%H%M%S%f"), "pack")
+    except (IOError, OSError):
+        print("Create symbolic folder pack failed")
+    print("Generate pack file in directory {} complete".format(now.strftime("%m%d-%H%M%S%f")))
 
 
 def do_pack(cfg_file) -> None:
@@ -916,7 +1033,7 @@ def do_pack(cfg_file) -> None:
         out += b'\xFF' * 4
         out += data
         # Always put image start @ 16 byte boundary
-        pad = 16 - (img_len + 8) & 0xF        
+        pad = 16 - (img_len + 8) & 0xF
         if pad != 16:
             out += b'\xFF' * pad
 
@@ -1056,7 +1173,7 @@ def do_convert(cfg_file) -> None:
 
                 # Write encrypt image
                 try:
-                    with open(now.strftime("%m%d-%H%M%S%f") + '/enc_' + img["file"], "wb") as enc_file:
+                    with open(now.strftime("%m%d-%H%M%S%f") + '/enc_' + os.path.basename(img["file"]), "wb") as enc_file:
                         enc_file.write(data_out)
                 except (IOError, OSError) as err:
                     print("Create encrypt file failed")
@@ -1177,6 +1294,7 @@ def do_msc(media, reserve, option=OPT_NONE) -> None:
     # devices = XUsbComList(attach_all=mp_mode).get_dev()
     _XUsbComList = XUsbComList(attach_all=mp_mode)
     devices = _XUsbComList.get_dev()
+
     if len(devices) == 0:
         print("Device not found")
         sys.exit(2)
@@ -1220,7 +1338,8 @@ def get_option(option) -> int:
         'EXECUTE': OPT_EXECUTE,
         'UNPACK': OPT_UNPACK,
         'RAW': OPT_RAW,
-        'EJECT': OPT_EJECT
+        'EJECT': OPT_EJECT,
+        'STUFF': OPT_STUFF
     }.get(option, OPT_NONE)
 
 
@@ -1236,11 +1355,10 @@ def get_type(img_type) -> int:
 
 
 def main():
-
     parser = argparse.ArgumentParser()
 
     parser.add_argument("CONFIG", nargs='?', help="Config file", type=str, default='')
-    parser.add_argument("-a", "--attach", action='store_true', help="Attach to NUA3500")
+    parser.add_argument("-a", "--attach", action='store_true', help="Attach to MA35D1")
     parser.add_argument("-o", "--option", nargs='+', help="Option flag")
     parser.add_argument("-t", "--type", nargs='+', help="Type flag")
     group = parser.add_mutually_exclusive_group()
@@ -1290,6 +1408,8 @@ def main():
         else:
             if option == OPT_UNPACK:
                 do_unpack(cfg_file)
+            elif option == OPT_STUFF:
+                do_stuff(cfg_file)
             else:
                 do_pack(cfg_file)
     elif args.read:
@@ -1302,7 +1422,7 @@ def main():
         media = get_media(args.read[0])
 
         try:
-            if media in [DEV_DDR_SRAM, DEV_OTP, DEV_UNKNOWN]:
+            if media in [DEV_OTP, DEV_UNKNOWN]:
                 raise ValueError(f"Cannot support read {str.upper(args.read[0])}")
             if arg_count == 3 and str.upper(args.read[1]) != 'ALL':
                 raise ValueError("Unknown arguments")
@@ -1310,7 +1430,7 @@ def main():
             sys.exit(err)
 
         if str.upper(args.read[1]) == 'ALL':
-            do_img_read(media, 0, args.read[2], option)
+            do_img_read(media, 0, args.read[2], 0, option)
         else:
             try:
                 start = int(args.read[1], 0)
@@ -1333,7 +1453,7 @@ def main():
         try:
             if media == DEV_UNKNOWN:
                 raise ValueError(f"Unknown storage media {str.upper(args.write[0])}")
-            if option == OPT_VERIFY and (media == DEV_DDR_SRAM or media == DEV_OTP):
+            if option == OPT_VERIFY and media == DEV_OTP:
                 raise ValueError(f"Do not support verify option on {str.upper(args.write[0])}")
             if option == OPT_EXECUTE and media != DEV_DDR_SRAM:
                 raise ValueError(f"Do not support execution on {str.upper(args.write[0])}")
@@ -1365,8 +1485,8 @@ def main():
         media = get_media(args.erase[0])
 
         try:
-            if media in [DEV_DDR_SRAM, DEV_OTP, DEV_UNKNOWN]:
-                raise ValueError(f"Unknown storage media {str.upper(args.erase[0])}")
+            if media in [DEV_DDR_SRAM, DEV_OTP, DEV_SD_EMMC, DEV_UNKNOWN]:
+                raise ValueError(f"{str.upper(args.erase[0])} does not support erase")
             if arg_count == 2 and str.upper(args.erase[1]) != 'ALL':
                 raise ValueError("Unknown arguments")
         except ValueError as err:

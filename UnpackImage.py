@@ -1,4 +1,3 @@
-# SPDX-License-Identifier: Apache-2.0
 # NOTE: This script is test under Python 3.x
 
 __copyright__ = "Copyright (C) 2020 Nuvoton Technology Corp. All rights reserved"

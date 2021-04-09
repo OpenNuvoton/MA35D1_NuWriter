@@ -1,7 +1,6 @@
-# SPDX-License-Identifier: Apache-2.0
 # NOTE: This script is test under Python 3.x
 
-__copyright__ = "Copyright (C) 2020 Nuvoton Technology Corp. All rights reserved"
+__copyright__ = "Copyright (C) 2020~2021 Nuvoton Technology Corp. All rights reserved"
 
 import sys
 import usb.core
@@ -131,8 +130,7 @@ class XUsbComList:
         for dev in self.devices:
             try:
                 dev.set_configuration()
-            #except (usb.core.USBError, NotImplementedError) as err:
-            except usb.core.USBError as err:
+            except (usb.core.USBError, NotImplementedError) as err:
                 sys.exit(err)
 
         for i in range(0, len(self.devices)):
