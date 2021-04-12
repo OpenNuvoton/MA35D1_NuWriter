@@ -3,6 +3,7 @@
 import sys, os
 
 from PyQt5 import QtWidgets, QtCore, QtGui
+from PyQt5.QtCore import QObject, QRunnable, QThreadPool, pyqtSignal
 
 from nuwriter import (DEV_DDR_SRAM, DEV_NAND, DEV_OTP, DEV_SD_EMMC,
         DEV_SPINAND, DEV_SPINOR, DEV_USBH,
@@ -61,6 +62,7 @@ class Ui(QtWidgets.QMainWindow, Ui_MainWindow):
         self.browseDDR_btn.clicked.connect(self.iniBrowse)
         self.attach_btn.clicked.connect(self.doAttach)
 
+        self.threadpool = QThreadPool()
     def addMedia(self):
 
         # DEV_DDR_SRAM = 0
@@ -204,6 +206,7 @@ class Ui(QtWidgets.QMainWindow, Ui_MainWindow):
         """Append text to the QTextEdit."""
         # Maybe QTextEdit.append() works as well, but this is how I do it:
         self.text_browser.insertPlainText(text)
+        self.text_browser.moveCursor(QtGui.QTextCursor.End)
 
     def iniBrowse(self):
         filename = ""
@@ -225,17 +228,11 @@ class Ui(QtWidgets.QMainWindow, Ui_MainWindow):
         self.text_browser.clear()
         # print(f'do_attach({iniFile})')
 
-        try:
-            do_attach(iniFile)
-        except SystemExit as e:
-            print(f'SystemExit: {e}')
-            pass
-        except Exception as e:
-            print(f'An Error occurred: {e}')
-            pass
-        except:
-            print('except')
-            pass
+        # do_attach(iniFile)
+        worker = Worker(do_attach, iniFile)
+
+        # Execute
+        self.threadpool.start(worker)
 
     # def do_img_read(media, start, out_file_name, length=0x1, option=OPT_NONE) -> None:
     @QtCore.pyqtSlot(int, str, str, str, int, bool)
@@ -287,21 +284,12 @@ class Ui(QtWidgets.QMainWindow, Ui_MainWindow):
 
         self.conf.write(open(self.iniFilePath, 'w', encoding='utf-8'))
 
-        try:
-            # print(f'do_img_read({media}, {start}, {fileStr}, {length}, {option})')
-            do_img_read(media, start, fileStr, length, option)
-        except SystemExit as e:
-            print(f'SystemExit: {e}')
-            pass
-        except Exception as e:
-            print(f'An Error occurred: {e}')
-            pass
-        except:
-            print('except')
-            pass
+        # print(f'do_img_read({media}, {start}, {fileStr}, {length}, {option})')
+        # do_img_read(media, start, fileStr, length, option)
+        worker = Worker(do_img_read, media, start, fileStr, length, option)
 
-
-        pass
+        # Execute
+        self.threadpool.start(worker)
 
     # def do_img_program(media, start, image_file_name, option=OPT_NONE) -> None:
     @QtCore.pyqtSlot(int, str, str, int, bool)
@@ -355,25 +343,22 @@ class Ui(QtWidgets.QMainWindow, Ui_MainWindow):
 
         self.conf.write(open(self.iniFilePath, 'w', encoding='utf-8'))
 
-        try:
-            if media == DEV_OTP:
-                # print(f'do_otp_program({image_file_name})')
-                do_otp_program(image_file_name)
-            elif ispack:
-                # print(f'do_pack_program({media}, {image_file_name}, {option})')
-                do_pack_program(media, image_file_name, option)
-            else:
-                # print(f'do_img_program({media}, {start}, {image_file_name}, {option})')
-                do_img_program(media, start, image_file_name, option)
-        except SystemExit as e:
-            print(f'SystemExit: {e}')
-            pass
-        except Exception as e:
-            print(f'An Error occurred: {e}')
-            pass
-        except:
-            print('except')
-            pass
+        if media == DEV_OTP:
+            # print(f'do_otp_program({image_file_name})')
+            # do_otp_program(image_file_name)
+            worker = Worker(do_otp_program, image_file_name)
+        elif ispack:
+            # print(f'do_pack_program({media}, {image_file_name}, {option})')
+            # do_pack_program(media, image_file_name, option)
+            worker = Worker(do_pack_program, media, image_file_name, option)
+        else:
+            # print(f'do_img_program({media}, {start}, {image_file_name}, {option})')
+            # do_img_program(media, start, image_file_name, option)
+            worker = Worker(do_img_program, media, start, image_file_name, option)
+
+        # Execute
+        self.threadpool.start(worker)
+
 
     # def do_img_erase(media, start, length=0, option=OPT_NONE) -> None:
     @QtCore.pyqtSlot(int, str, str, int, bool)
@@ -417,18 +402,13 @@ class Ui(QtWidgets.QMainWindow, Ui_MainWindow):
 
         self.conf.write(open(self.iniFilePath, 'w', encoding='utf-8'))
 
-        try:
-            print(f'do_img_erase({media}, {start}, {length}, {option})')
-            do_img_erase(media, start, length, option)
-        except SystemExit as e:
-            print(f'SystemExit: {e}')
-            pass
-        except Exception as e:
-            print(f'An Error occurred: {e}')
-            pass
-        except:
-            print('except')
-            pass
+        # print(f'do_img_erase({media}, {start}, {length}, {option})')
+        # do_img_erase(media, start, length, option)
+
+        worker = Worker(do_img_erase, media, start, length, option)
+
+        # Execute
+        self.threadpool.start(worker)
 
     @QtCore.pyqtSlot(str, int)
     def doMsc(self, reserveStr, option):
@@ -452,10 +432,34 @@ class Ui(QtWidgets.QMainWindow, Ui_MainWindow):
 
         self.conf.write(open(self.iniFilePath, 'w', encoding='utf-8'))
 
+        media = DEV_SD_EMMC
+        # print(f'do_msc({media}, {reserve}, {option})')
+        # do_msc(media, reserve, option)
+
+        worker = Worker(do_msc, media, reserve, option)
+
+        # Execute
+        self.threadpool.start(worker)
+
+class Worker(QRunnable):
+
+    def __init__(self, fn, *args, **kwargs):
+        super(Worker, self).__init__()
+        # Store constructor arguments (re-used for processing)
+        self.fn = fn
+        self.args = args
+        self.kwargs = kwargs
+
+    def run(self):
+
+        """Long-running task."""
+        # from time import sleep
+        # for i in range(5):
+        #     sleep(1)
+        #     print("Long-running task.")
+
         try:
-            media = DEV_SD_EMMC
-            print(f'do_msc({media}, {reserve}, {option})')
-            do_msc(media, reserve, option)
+            self.fn(*self.args, **self.kwargs)
         except SystemExit as e:
             print(f'SystemExit: {e}')
             pass
@@ -465,9 +469,6 @@ class Ui(QtWidgets.QMainWindow, Ui_MainWindow):
         except:
             print('except')
             pass
-
-
-        pass
 
 if __name__ == "__main__":
 
