@@ -493,6 +493,10 @@ def __pack_program(dev, media, pack_image, option) -> int:
             bar.update(xfer_size)
         bar.close()
         dev.read(4)
+
+        # FIXME: Added time.sleep(1) to make SPI NAND Pack Program + Verify PASS
+        time.sleep(1)
+
         if option == OPT_VERIFY:
             dev.set_media(media)
             cmd = img_start.to_bytes(8, byteorder='little')
