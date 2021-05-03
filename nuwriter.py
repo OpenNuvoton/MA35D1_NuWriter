@@ -1,7 +1,7 @@
 # NOTE: This script is test under Python 3.x
 
 __copyright__ = "Copyright (C) 2020~2021 Nuvoton Technology Corp. All rights reserved"
-__version__ = "v0.36"
+__version__ = "v0.37"
 
 import os
 import sys
@@ -60,6 +60,7 @@ OPT_UNPACK = 4      # For pack
 OPT_RAW = 5         # For write
 OPT_EJECT = 6       # For msc
 OPT_STUFF = 7       # For stuff pack
+OPT_SETINFO = 8     # For set storage info for attach
 
 # OPT block definitions
 OPT_OTPBLK1 = 0x100
@@ -86,6 +87,7 @@ mp_mode = False
 
 WINDOWS_PATH = "C:\\Program Files (x86)\\Nuvoton Tools\\NuWriter\\"
 LINUX_PATH = "/usr/share/nuwriter/"
+
 
 def conv_env(env_file_name, blk_size) -> bytearray:
 
@@ -310,7 +312,7 @@ def __img_erase(dev, media, start, length, option) -> int:
 
     nand_align, spinand_align = dev.get_align()
 
-    if (media == DEV_NAND and  nand_align == 0) or \
+    if (media == DEV_NAND and nand_align == 0) or \
        (media == DEV_SPINAND and spinand_align == 0):
         print("Unable to get block size")
         return -1
@@ -457,7 +459,7 @@ def __pack_program(dev, media, pack_image, option) -> int:
     nand_align, spinand_align = dev.get_align()
     image_cnt = pack_image.img_count()
 
-    if (media == DEV_NAND and  nand_align == 0) or \
+    if (media == DEV_NAND and nand_align == 0) or \
        (media == DEV_SPINAND and spinand_align == 0):
         print("Unable to get block size")
         return -1
@@ -566,7 +568,7 @@ def __img_program(dev, media, start, img_data, option) -> int:
 
     nand_align, spinand_align = dev.get_align()
 
-    if (media == DEV_NAND and  nand_align == 0) or \
+    if (media == DEV_NAND and nand_align == 0) or \
        (media == DEV_SPINAND and spinand_align == 0):
         print("Unable to get block size")
         return -1
@@ -627,7 +629,7 @@ def __img_program(dev, media, start, img_data, option) -> int:
             xfer_size = int.from_bytes(ack, byteorder="little")
 
             data = dev.read(xfer_size)
-            dev.write(xfer_size.to_bytes(4, byteorder='little'))    #ack
+            dev.write(xfer_size.to_bytes(4, byteorder='little'))  # ack
             offset = img_length - remain
 
             # For SD/eMMC
@@ -700,7 +702,7 @@ def do_img_read(media, start, out_file_name, length=0x1, option=OPT_NONE) -> Non
     ack = dev.read(4)
     if int.from_bytes(ack, byteorder="little") != ACK:
         print("Receive ACK error")
-        return -1
+        return
     # FIXME: Don't know real length for "read all"
     bar = tqdm(total=length, ascii=True)
     data = b''
@@ -736,15 +738,16 @@ def __attach(dev, ini_data, xusb_data) -> int:
     if int.from_bytes(in_buf, byteorder="little") != ini_len:
         print("Length error")
         return -1
+
     in_buf = dev.read(4)
     if int.from_bytes(in_buf, byteorder="little") != ACK:
-        print("Ack error")
+        val = int.from_bytes(in_buf, byteorder="little")
+        print(f"Ack error {val}")
         return -1
 
     xusb_len = len(xusb_data)
     out = int(xusb_len).to_bytes(4, byteorder="little")
-    #out += b'\x00\x00\x00\x90'  # Execute address is 0x90000000
-    out += b'\x00\x00\x00\x87'  # Execute address is 0x90000000
+    out += b'\x00\x00\x00\x87'  # Execute address is 0x87000000
     dev.write(out)
     for offset in range(0, xusb_len, TRANSFER_SIZE):
         xfer_size = TRANSFER_SIZE if offset + TRANSFER_SIZE < xusb_len else xusb_len - offset
@@ -760,9 +763,9 @@ def __attach(dev, ini_data, xusb_data) -> int:
     return 0
 
 
-def __get_info(dev) -> int:
+def __get_info(dev, data) -> int:
     try:
-        info = dev.get_info()
+        info = dev.get_info(data)
     except usb.core.USBError as err:
         sys.exit(err)
 
@@ -794,7 +797,7 @@ def __get_info(dev) -> int:
     print("Reserved: " + str(info_struct.rsv))
 
     print("==== SPI NAND ====")
-    print("Is uer config: " + str(info_struct.snand_dummy_byte))
+    print("Is uer config: " + str(info_struct.use_cfg2))
     print("ID: " + str(info_struct.snand_id))
     print("Page size: " + str(info_struct.snand_page_size))
     print("Spare size: " + str(info_struct.snand_oob))
@@ -812,7 +815,9 @@ def __get_info(dev) -> int:
     return 0
 
 
-def do_attach(ini_file_name, mp_mode1=False) -> None:
+def do_attach(ini_file_name, option=OPT_NONE) -> None:
+    global mp_mode
+
     init_location = "missing"
     if os.path.exists(ini_file_name):  # default use the init file in current directory
         init_location = ini_file_name
@@ -854,8 +859,8 @@ def do_attach(ini_file_name, mp_mode1=False) -> None:
         print("Open xusb.bin failed")
         sys.exit(err)
 
-    # devices = XUsbComList(attach_all=mp_mode1).get_dev()
-    _XUsbComList = XUsbComList(attach_all=mp_mode1)
+    # devices = XUsbComList(attach_all=mp_mode).get_dev()
+    _XUsbComList = XUsbComList(attach_all=mp_mode)
     devices = _XUsbComList.get_dev()
 
     if len(devices) == 0:
@@ -878,24 +883,73 @@ def do_attach(ini_file_name, mp_mode1=False) -> None:
     if success == 0:
         return
 
-    # print("Sleep 2 second, let PC re-enumerate")
-    # time.sleep(2)
-    # For Palladium emulation
-    # info = dev.get_info()
-    # print('Press Enter after PC re-enumerate done', end='')
-    # input()
     time.sleep(1)
-    print("Get device info")
 
-    # devices = XUsbComList(attach_all=mp_mode1).get_dev()
-    _XUsbComListNew = XUsbComList(attach_all=mp_mode1)
+    # devices = XUsbComList(attach_all=mp_mode).get_dev()
+    _XUsbComListNew = XUsbComList(attach_all=mp_mode)
     devices = _XUsbComListNew.get_dev()
 
+    data = bytearray(76)
+    # assign option file to set media info
+    if option == OPT_SETINFO:
+        try:
+            with open("info.json", "r") as json_file:
+                try:
+                    d = json.load(json_file)
+                except json.decoder.JSONDecodeError as err:
+                    print(f"{json_file} parsing error")
+                    sys.exit(err)
+        except (IOError, OSError) as err:
+            print("Open info.json failed")
+            sys.exit(err)
+        # now generate info from info.json
+        for key in d.keys():
+            if key == 'spinand':
+                data[48] = 1
+                for sub_key in d['spinand'].keys():
+                    if sub_key == 'pagesize':
+                        data[56:58] = int(d['spinand']['pagesize'], 0).to_bytes(4, byteorder="little")
+                    elif sub_key == 'sparearea':
+                        data[58:60] = int(d['spinand']['sparearea'], 0).to_bytes(4, byteorder="little")
+                    elif sub_key == 'quadread':
+                        data[60:61] = int(d['spinand']['quadread'], 0).to_bytes(1, byteorder="little")
+                    elif sub_key == 'readsts':
+                        data[61:62] = int(d['spinand']['readsts'], 0).to_bytes(1, byteorder="little")
+                    elif sub_key == 'writests':
+                        data[62:63] = int(d['spinand']['writests'], 0).to_bytes(1, byteorder="little")
+                    elif sub_key == 'stsvalue':
+                        data[63:64] = int(d['spinand']['stsvalue'], 0).to_bytes(1, byteorder="little")
+                    elif sub_key == 'dummy':
+                        data[64:68] = int(d['spinand']['dummy'], 0).to_bytes(4, byteorder="little")
+                    elif sub_key == 'blkcnt':
+                        data[68:72] = int(d['spinand']['blkcnt'], 0).to_bytes(4, byteorder="little")
+                    elif sub_key == 'pageperblk':
+                        data[72:76] = int(d['spinand']['pageperblk'], 0).to_bytes(4, byteorder="little")
+            elif key == 'spinor':
+                data[28] = 1
+                for sub_key in d['spinor'].keys():
+                    if sub_key == 'quadread':
+                        data[32:33] = int(d['spinor']['quadread'], 0).to_bytes(1, byteorder="little")
+                    elif sub_key == 'readsts':
+                        data[33:34] = int(d['spinor']['readsts'], 0).to_bytes(1, byteorder="little")
+                    elif sub_key == 'writests':
+                        data[34:35] = int(d['spinor']['writests'], 0).to_bytes(1, byteorder="little")
+                    elif sub_key == 'stsvalue':
+                        data[35:36] = int(d['spinor']['stsvalue'], 0).to_bytes(1, byteorder="little")
+                    elif sub_key == 'dummy':
+                        data[36:40] = int(d['spinor']['dummy'], 0).to_bytes(4, byteorder="little")
+            elif key == 'nand':
+                data[20] = 1
+                for sub_key in d['nand'].keys():
+                    if sub_key == 'blkcnt':
+                        data[8:12] = int(d['nand']['blkcnt'], 0).to_bytes(4, byteorder="little")
+                    elif sub_key == 'pageperblk':
+                        data[0:4] = int(d['nand']['pageperblk'], 0).to_bytes(4, byteorder="little")
     if len(devices) == 0:
         print("Device not found")
         sys.exit(2)
     with ThreadPoolExecutor(max_workers=8) as executor:
-        futures = [executor.submit(__get_info, dev) for dev in devices]
+        futures = [executor.submit(__get_info, dev, data) for dev in devices]
 
     success = 0
     failed = 0
@@ -1177,7 +1231,8 @@ def do_convert(cfg_file) -> None:
 
                 # Write encrypt image
                 try:
-                    with open(now.strftime("%m%d-%H%M%S%f") + '/enc_' + os.path.basename(img["file"]), "wb") as enc_file:
+                    with open(now.strftime("%m%d-%H%M%S%f") + '/enc_' +
+                              os.path.basename(img["file"]), "wb") as enc_file:
                         enc_file.write(data_out)
                 except (IOError, OSError) as err:
                     print("Create encrypt file failed")
@@ -1343,7 +1398,8 @@ def get_option(option) -> int:
         'UNPACK': OPT_UNPACK,
         'RAW': OPT_RAW,
         'EJECT': OPT_EJECT,
-        'STUFF': OPT_STUFF
+        'STUFF': OPT_STUFF,
+        'SETINFO': OPT_SETINFO
     }.get(option, OPT_NONE)
 
 
@@ -1396,8 +1452,7 @@ def main():
         if not cfg_file:
             print("Please assign a DDR ini file")
             sys.exit(0)
-        # do_attach(cfg_file, mp_mode=False)
-        do_attach(cfg_file, mp_mode1=False)
+        do_attach(cfg_file, option)
 
     if args.convert:
         if cfg_file == '':
@@ -1534,7 +1589,6 @@ def main():
     elif args.version:
         print('NuWriter ' + __version__)
         print(__copyright__)
-
 
 
 # Here goes the main function
