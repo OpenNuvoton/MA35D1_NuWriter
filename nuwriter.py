@@ -908,9 +908,9 @@ def do_attach(ini_file_name, option=OPT_NONE) -> None:
                 data[48] = 1
                 for sub_key in d['spinand'].keys():
                     if sub_key == 'pagesize':
-                        data[56:58] = int(d['spinand']['pagesize'], 0).to_bytes(4, byteorder="little")
+                        data[56:58] = int(d['spinand']['pagesize'], 0).to_bytes(2, byteorder="little")
                     elif sub_key == 'sparearea':
-                        data[58:60] = int(d['spinand']['sparearea'], 0).to_bytes(4, byteorder="little")
+                        data[58:60] = int(d['spinand']['sparearea'], 0).to_bytes(2, byteorder="little")
                     elif sub_key == 'quadread':
                         data[60:61] = int(d['spinand']['quadread'], 0).to_bytes(1, byteorder="little")
                     elif sub_key == 'readsts':
