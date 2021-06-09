@@ -59,8 +59,12 @@ OPT_VERIFY = 3      # For write
 OPT_UNPACK = 4      # For pack
 OPT_RAW = 5         # For write
 OPT_EJECT = 6       # For msc
-OPT_STUFF = 7       # For stuff pack
+OPT_STUFF = 7       # For stuff pack, output could be used by dd command
 OPT_SETINFO = 8     # For set storage info for attach
+OPT_CONCAT = 9      # For convert, concatenate at the end of encrypted data file
+OPT_SHOWHDR = 10    # For convert. Instead of convert, show header content instead
+OPT_UNKNOWN = 0xFF  # Error
+
 
 # OPT block definitions
 OPT_OTPBLK1 = 0x100
@@ -1116,8 +1120,64 @@ def do_pack(cfg_file) -> None:
     print("Generate pack file in directory {} complete".format(now.strftime("%m%d-%H%M%S%f")))
 
 
-def do_convert(cfg_file) -> None:
+def do_showhdr(cfg_file) -> None:
+    try:
+        header_file = open(cfg_file, "br")
+    except (IOError, OSError) as err:
+        print(f"Open {cfg_file} failed")
+        sys.exit(err)
 
+    if unpack('<I', header_file.read(4))[0] != 0x4E565420:
+        print("Header checker error, not a valid header image")
+        header_file.close()
+        return
+
+    checksum0 = unpack('<I', header_file.read(4))[0]
+    buf = header_file.read()
+    crc32_func = crcmod.predefined.mkCrcFun('crc-32')
+    checksum1 = crc32_func(buf)
+    if checksum1 != checksum0:
+        print("Checksum is incorrect")
+        print(f"Expect {checksum1}, get {checksum0}")
+        header_file.close()
+        return
+    header_file.seek(8)
+    print("Length: " + str(unpack('<I', header_file.read(4))[0]))
+    print("Version: " + hex(unpack('<I', header_file.read(4))[0]))
+    print("==== SPI INFO ====")
+    print("Page size: " + str(unpack('<H', header_file.read(2))[0]))
+    print("Spare area size: " + str(unpack('<H', header_file.read(2))[0]))
+    print("Page per block: " + str(unpack('<H', header_file.read(2))[0]))
+    print("Quad read cmd: " + hex(unpack('<B', header_file.read(1))[0]))
+    print("Read status cmd: " + hex(unpack('<B', header_file.read(1))[0]))
+    print("Write status cmd: " + hex(unpack('<B', header_file.read(1))[0]))
+    print("Status Value: " + hex(unpack('<B', header_file.read(1))[0]))
+    print("Dummy byte 1: " + str(unpack('<B', header_file.read(1))[0]))
+    print("Dummy byte 2: " + str(unpack('<B', header_file.read(1))[0]))
+    print("Suspend interval: " + str(unpack('<B', header_file.read(1))[0]))
+    header_file.read(3)  # Skip three dummy bytes
+    print("==== SPI INFO ====")
+    print("Entry point: " + hex(unpack('<I', header_file.read(4))[0]))
+    count = unpack('<I', header_file.read(4))[0]
+    print(f"Image count: {count}")
+    for i in range(0, count):
+        print(f"==== Image {i} ====")
+        print("Offset: " + hex(unpack('<I', header_file.read(4))[0]))
+        print("Load addr: " + hex(unpack('<I', header_file.read(4))[0]))
+        print("Size: " + hex(unpack('<I', header_file.read(4))[0]))
+        print("Type: " + str(unpack('<I', header_file.read(4))[0]))
+        print("R: ", end='')
+        for _ in range(0, 32):
+            print(format(unpack('<B', header_file.read(1))[0], 'x'), end='')
+        print("")
+        print("S: ", end='')
+        for _ in range(0, 32):
+            print(format(unpack('<B', header_file.read(1))[0], 'x'), end='')
+        print("")
+    header_file.close()
+
+
+def do_convert(cfg_file, option=OPT_NONE) -> None:
     now = datetime.now()
 
     try:
@@ -1310,12 +1370,19 @@ def do_convert(cfg_file) -> None:
 
             aes_enc = AES.new(aeskey, AES.MODE_CFB, b'\x00' * 16, segment_size=128)
             data_out = aes_enc.encrypt(data)
-
+            signature = sk.sign(data_out)
             try:
+                if option is OPT_CONCAT:
+                    # Append the R & S at the end of signed image instead of writing to a separate file.
+                    # The signed image could be used in deployed mode
+                    data_out += signature
+                else:
+                    with open(now.strftime("%m%d-%H%M%S%f") + '/sig_' + img["file"], "wb") as sig_file:
+                        sig_file.write(signature)  # R & S
+
                 with open(now.strftime("%m%d-%H%M%S%f") + '/enc_' + img["file"], "wb") as enc_file:
                     enc_file.write(data_out)
-                with open(now.strftime("%m%d-%H%M%S%f") + '/sig_' + img["file"], "wb") as sig_file:
-                    sig_file.write(sk.sign(data_out))  # R & S
+
             except (IOError, OSError) as err:
                 print("Create encrypt/signature file failed")
                 shutil.rmtree(now.strftime("%m%d-%H%M%S%f"))
@@ -1399,8 +1466,10 @@ def get_option(option) -> int:
         'RAW': OPT_RAW,
         'EJECT': OPT_EJECT,
         'STUFF': OPT_STUFF,
-        'SETINFO': OPT_SETINFO
-    }.get(option, OPT_NONE)
+        'SETINFO': OPT_SETINFO,
+        'CONCAT': OPT_CONCAT,
+        'SHOWHDR': OPT_SHOWHDR
+    }.get(option, OPT_UNKNOWN)
 
 
 def get_type(img_type) -> int:
@@ -1441,6 +1510,9 @@ def main():
     else:
         option = OPT_NONE
 
+    if option is OPT_UNKNOWN:
+        print("Unknown option: " + args.option[0])
+        sys.exit(0)
     # if args.type:
     #     img_type = get_type(args.type[0])
     # else:
@@ -1459,7 +1531,10 @@ def main():
             print("No config file assigned")
             sys.exit(0)
         else:
-            do_convert(cfg_file)
+            if option == OPT_SHOWHDR:
+                do_showhdr(cfg_file)
+            else:
+                do_convert(cfg_file, option)
     elif args.pack:
         if cfg_file == '':
             print("No config file assigned")
