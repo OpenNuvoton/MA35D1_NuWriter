@@ -76,6 +76,15 @@ OPT_OTPBLK6 = 0x2000
 OPT_OTPBLK7 = 0x4000
 OPT_OTPKEY = 0x8000
 
+# for key lock
+OPT_OTPKEY0 = 0x10000
+OPT_OTPKEY1 = 0x20000
+OPT_OTPKEY2 = 0x40000
+OPT_OTPKEY3 = 0x80000
+OPT_OTPKEY4 = 0x100000
+OPT_OTPKEY5 = 0x200000
+
+
 # Image type definitions
 IMG_DATA = 0
 IMG_TFA = 1
@@ -148,7 +157,7 @@ def get_plm(plm) -> int:
     }.get(plm, 0)
 
 
-def conv_otp(opt_file_name) -> (bytearray, int):
+def conv_otp(opt_file_name) -> tuple[bytearray, int]:
     try:
         with open(opt_file_name, "r") as json_file:
             try:
@@ -240,8 +249,6 @@ def conv_otp(opt_file_name) -> (bytearray, int):
         elif key == 'sec':
             newkey = bytes.fromhex(d['sec'])
             newkey += b'\x00' * (88 - len(newkey))
-            print("===========")
-            print(len(newkey))
             data[32:120] = newkey
             option |= OPT_OTPBLK6
         elif key == 'nonsec':
@@ -251,60 +258,216 @@ def conv_otp(opt_file_name) -> (bytearray, int):
             option |= OPT_OTPBLK7
         elif key == 'huk0':
             newkey = bytes.fromhex(d['huk0']['key'])
+            if len(newkey) != 16:
+                print("HUK0 is 128-bit")
+                sys.exit(2)
             newkey += b'\x00' * (32 - len(newkey))
             newkey += int(d['huk0']['size'], 0).to_bytes(4, byteorder='little')
             newkey += b'\x00\x00\x00\x00'
-            newkey += int(d['huk0']['meta'], 0).to_bytes(4, byteorder='little')
+
+            if d['huk0']['meta'] == 'aes':
+                newkey += b'\x00\x00\x00\x80'
+            elif d['huk0']['meta'] == 'aes-lock':
+                option |= OPT_OTPKEY0;
+                newkey += b'\x00\x00\x00\x80'
+            elif d['huk0']['meta'] == 'hmac':
+                newkey += b'\x00\x00\x01\x80'
+            elif d['huk0']['meta'] == 'hmac-lock':
+                option |= OPT_OTPKEY0;
+                newkey += b'\x00\x00\x01\x80'
+            elif d['huk0']['meta'] == 'ecc':
+                newkey += b'\x00\x00\x04\x80'
+            elif d['huk0']['meta'] == 'ecc-lock':
+                option |= OPT_OTPKEY0;
+                newkey += b'\x00\x00\x04\x80'
+            elif d['huk0']['meta'] == 'cpu':
+                newkey += b'\x00\x00\x05\x80'
+            elif d['huk0']['meta'] == 'cpu-lock':
+                option |= OPT_OTPKEY0;
+                newkey += b'\x00\x00\x05\x80'
+
             data += newkey
         elif key == 'huk1':
             newkey = bytes.fromhex(d['huk1']['key'])
+            if len(newkey) != 16:
+                print("HUK1 is 128-bit")
+                sys.exit(2)
             newkey += b'\x00' * (32 - len(newkey))
             newkey += int(d['huk1']['size'], 0).to_bytes(4, byteorder='little')
             newkey += b'\x01\x00\x00\x00'
-            newkey += int(d['huk1']['meta'], 0).to_bytes(4, byteorder='little')
+
+            if d['huk1']['meta'] == 'aes':
+                newkey += b'\x00\x00\x00\x80'
+            elif d['huk1']['meta'] == 'aes-lock':
+                option |= OPT_OTPKEY1;
+                newkey += b'\x00\x00\x00\x80'
+            elif d['huk1']['meta'] == 'hmac':
+                newkey += b'\x00\x00\x01\x80'
+            elif d['huk1']['meta'] == 'hmac-lock':
+                option |= OPT_OTPKEY1;
+                newkey += b'\x00\x00\x01\x80'
+            elif d['huk1']['meta'] == 'ecc':
+                newkey += b'\x00\x00\x04\x80'
+            elif d['huk1']['meta'] == 'ecc-lock':
+                option |= OPT_OTPKEY1;
+                newkey += b'\x00\x00\x04\x80'
+            elif d['huk1']['meta'] == 'cpu':
+                newkey += b'\x00\x00\x05\x80'
+            elif d['huk1']['meta'] == 'cpu-lock':
+                option |= OPT_OTPKEY1;
+                newkey += b'\x00\x00\x05\x80'
+
             data += newkey
         elif key == 'huk2':
             newkey = bytes.fromhex(d['huk2']['key'])
+            if len(newkey) != 16:
+                print("HUK0 is 128-bit")
+                sys.exit(2)
             newkey += b'\x00' * (32 - len(newkey))
             newkey += int(d['huk2']['size'], 0).to_bytes(4, byteorder='little')
             newkey += b'\x02\x00\x00\x00'
-            newkey += int(d['huk2']['meta'], 0).to_bytes(4, byteorder='little')
+
+            if d['huk2']['meta'] == 'aes':
+                newkey += b'\x00\x00\x00\x80'
+            elif d['huk2']['meta'] == 'aes-lock':
+                option |= OPT_OTPKEY2;
+                newkey += b'\x00\x00\x00\x80'
+            elif d['huk2']['meta'] == 'hmac':
+                newkey += b'\x00\x00\x01\x80'
+            elif d['huk2']['meta'] == 'hmac-lock':
+                option |= OPT_OTPKEY2;
+                newkey += b'\x00\x00\x01\x80'
+            elif d['huk2']['meta'] == 'ecc':
+                newkey += b'\x00\x00\x04\x80'
+            elif d['huk2']['meta'] == 'ecc-lock':
+                option |= OPT_OTPKEY2;
+                newkey += b'\x00\x00\x04\x80'
+            elif d['huk2']['meta'] == 'cpu':
+                newkey += b'\x00\x00\x05\x80'
+            elif d['huk2']['meta'] == 'cpu-lock':
+                option |= OPT_OTPKEY2;
+                newkey += b'\x00\x00\x05\x80'
+
             data += newkey
         elif key == 'key3':
             newkey = bytes.fromhex(d['key3']['key'])
+            if len(newkey) != 32:
+                print("key3 is 256-bit")
+                sys.exit(2)
             newkey += b'\x00' * (32 - len(newkey))
             newkey += int(d['key3']['size'], 0).to_bytes(4, byteorder='little')
             newkey += b'\x03\x00\x00\x00'
-            newkey += int(d['key3']['meta'], 0).to_bytes(4, byteorder='little')
+
+            if d['key3']['meta'] == 'aes':
+                newkey += b'\x00\x00\x00\x80'
+            elif d['key3']['meta'] == 'aes-lock':
+                option |= OPT_OTPKEY3;
+                newkey += b'\x00\x00\x00\x80'
+            elif d['key3']['meta'] == 'hmac':
+                newkey += b'\x00\x00\x01\x80'
+            elif d['key3']['meta'] == 'hmac-lock':
+                option |= OPT_OTPKEY3;
+                newkey += b'\x00\x00\x01\x80'
+            elif d['key3']['meta'] == 'ecc':
+                newkey += b'\x00\x00\x04\x80'
+            elif d['key3']['meta'] == 'ecc-lock':
+                option |= OPT_OTPKEY3;
+                newkey += b'\x00\x00\x04\x80'
+            elif d['key3']['meta'] == 'cpu':
+                newkey += b'\x00\x00\x05\x80'
+            elif d['key3']['meta'] == 'cpu-lock':
+                option |= OPT_OTPKEY3;
+                newkey += b'\x00\x00\x05\x80'
+
             data += newkey
         elif key == 'key4':
             newkey = bytes.fromhex(d['key4']['key'])
+            if len(newkey) != 32:
+                print("key4 is 256-bit")
+                sys.exit(2)
             newkey += b'\x00' * (32 - len(newkey))
             newkey += int(d['key4']['size'], 0).to_bytes(4, byteorder='little')
             newkey += b'\x04\x00\x00\x00'
-            newkey += int(d['key4']['meta'], 0).to_bytes(4, byteorder='little')
+
+            if d['key4']['meta'] == 'aes':
+                newkey += b'\x00\x00\x00\x80'
+            elif d['key4']['meta'] == 'aes-lock':
+                option |= OPT_OTPKEY4;
+                newkey += b'\x00\x00\x00\x80'
+            elif d['key4']['meta'] == 'hmac':
+                newkey += b'\x00\x00\x01\x80'
+            elif d['key4']['meta'] == 'hmac-lock':
+                option |= OPT_OTPKEY4;
+                newkey += b'\x00\x00\x01\x80'
+            elif d['key4']['meta'] == 'ecc':
+                newkey += b'\x00\x00\x04\x80'
+            elif d['key4']['meta'] == 'ecc-lock':
+                option |= OPT_OTPKEY4;
+                newkey += b'\x00\x00\x04\x80'
+            elif d['key4']['meta'] == 'cpu':
+                newkey += b'\x00\x00\x05\x80'
+            elif d['key4']['meta'] == 'cpu-lock':
+                option |= OPT_OTPKEY4;
+                newkey += b'\x00\x00\x05\x80'
+
             data += newkey
         elif key == 'key5':
             newkey = bytes.fromhex(d['key5']['key'])
+            if len(newkey) != 32:
+                print("key5 is 256-bit")
+                sys.exit(2)
             newkey += b'\x00' * (32 - len(newkey))
             newkey += int(d['key5']['size'], 0).to_bytes(4, byteorder='little')
             newkey += b'\x05\x00\x00\x00'
-            newkey += int(d['key5']['meta'], 0).to_bytes(4, byteorder='little')
+
+            if d['key5']['meta'] == 'aes':
+                newkey += b'\x00\x00\x00\x80'
+            elif d['key5']['meta'] == 'aes-lock':
+                option |= OPT_OTPKEY5;
+                newkey += b'\x00\x00\x00\x80'
+            elif d['key5']['meta'] == 'hmac':
+                newkey += b'\x00\x00\x01\x80'
+            elif d['key5']['meta'] == 'hmac-lock':
+                option |= OPT_OTPKEY5;
+                newkey += b'\x00\x00\x01\x80'
+            elif d['key5']['meta'] == 'ecc':
+                newkey += b'\x00\x00\x04\x80'
+            elif d['key5']['meta'] == 'ecc-lock':
+                option |= OPT_OTPKEY5;
+                newkey += b'\x00\x00\x04\x80'
+            elif d['key5']['meta'] == 'cpu':
+                newkey += b'\x00\x00\x05\x80'
+            elif d['key5']['meta'] == 'cpu-lock':
+                option |= OPT_OTPKEY5;
+                newkey += b'\x00\x00\x05\x80'
+
             data += newkey
         elif key == 'publicx':
+            newkey = bytes.fromhex(d['publicx'])
+            if len(newkey) != 32:
+                print("IBR publicx is 256-bit")
+                sys.exit(2)
             data += bytes.fromhex(d['publicx'])
             data += b'\x00\x01\x00\x00'    # 256 bits
             data += b'\x06\x00\x00\x00'
             data += b'\x11\x06\x04\x80'
         elif key == 'publicy':
+            newkey = bytes.fromhex(d['publicy'])
+            if len(newkey) != 32:
+                print("IBR publicy is 256-bit")
+                sys.exit(2)
             data += bytes.fromhex(d['publicy'])
             data += b'\x00\x01\x00\x00'    # 256 bits
             data += b'\x07\x00\x00\x00'
             data += b'\x11\x06\x04\x80'
         elif key == 'aeskey':
+            newkey = bytes.fromhex(d['aeskey'])
+            if len(newkey) != 32:
+                print("IBR aeskey is 256-bit")
+                sys.exit(2)
             data += bytes.fromhex(d['aeskey'])
             data += b'\x00\x01\x00\x00'    # 256 bits
-            data += b'\x07\x00\x00\x00'
+            data += b'\x08\x00\x00\x00'
             data += b'\x11\x06\x00\x80'
 
     if len(data) > 208:
@@ -379,10 +542,62 @@ def do_img_erase(media, start, length=0, option=OPT_NONE) -> None:
         print(f"Failed to erase {failed} device(s)")
 
 
-def __otp_program(dev, opt_writer, opt_data, option) -> int:
+def do_otp_erase(option) -> None:
+    global mp_mode
 
-    img_length = len(opt_writer)
-    cmd = b'\x00\x40\x00\x20\x00\x00\x00\x00'
+    # devices = XUsbComList(attach_all=mp_mode).get_dev()
+    _XUsbComList = XUsbComList(attach_all=mp_mode)
+    devices = _XUsbComList.get_dev()
+
+    if len(devices) == 0:
+        print("Device not found")
+        sys.exit(2)
+
+    start = 0
+    length = 0
+    dev = devices[0]
+    load_otp_writer(dev)
+    cmd = start.to_bytes(8, byteorder='little')
+    cmd += length.to_bytes(8, byteorder='little')
+    cmd += ACT_ERASE.to_bytes(4, byteorder='little')
+    cmd += option.to_bytes(4, byteorder='little')
+
+    dev.set_media(DEV_OTP)
+    dev.write(cmd)
+    ack = dev.read(4)
+    if int.from_bytes(ack, byteorder="little") != ACK:
+        print("Receive ACK error")
+        print(f"Failed to erase device(s)")
+
+    # There's no way to tell the progress...
+    ack = dev.read(4)
+    data = int.from_bytes(ack, byteorder="little")
+    if option == 0x100:
+        data >>= 2
+        data &= 0x3
+    if option == 0x400:
+        data >>= 6
+        data &= 0x3
+    if option == 0x800:
+        data >>= 8
+        data &= 0x3
+    if option & 0x8000:
+        data >>= 16
+    #print(f"Erase count state {hex(data)}")
+
+    print(f"Successfully erased device(s)")
+
+def load_otp_writer(dev) -> int:
+    try:
+        with open("otp_writer.bin", "rb") as writer_file:
+            otp_writer = writer_file.read()
+    except (IOError, OSError) as err:
+        print(f"Open {opt_file_name} failed")
+        sys.exit(err)
+    
+    option = 0
+    img_length = len(otp_writer)
+    cmd = b'\x00\x00\xf0\x86\x00\x00\x00\x00'
     cmd += img_length.to_bytes(8, byteorder='little')
     cmd += ACT_LOAD.to_bytes(4, byteorder='little')
     cmd += option.to_bytes(4, byteorder='little')
@@ -395,15 +610,25 @@ def __otp_program(dev, opt_writer, opt_data, option) -> int:
 
     for offset in range(0, img_length, TRANSFER_SIZE):
         xfer_size = TRANSFER_SIZE if offset + TRANSFER_SIZE < img_length else img_length - offset
-        dev.write(opt_writer[offset: offset + xfer_size])
+        dev.write(otp_writer[offset: offset + xfer_size])
         ack = dev.read(4)
-        if ack != xfer_size:
+        if int.from_bytes(ack, byteorder="little") != xfer_size:
             print("Acked size error")
             return -1
 
-    img_length = len(opt_data)
+    while True:
+        # wait TSI update firmware
+        ack = dev.read(4)
+        if int.from_bytes(ack, byteorder="little") == ACK:
+            break
 
-    cmd = b'\x00' * 8
+    return 0
+
+def __otp_program(dev, otp_data, option) -> int:
+
+    img_length = len(otp_data)
+
+    cmd = b'\x00\x00\xf0\x86\x00\x00\x00\x00'
     cmd += img_length.to_bytes(8, byteorder='little')
     cmd += ACT_WRITE.to_bytes(4, byteorder='little')
     cmd += option.to_bytes(4, byteorder='little')
@@ -415,11 +640,17 @@ def __otp_program(dev, opt_writer, opt_data, option) -> int:
         print("Receive ACK error")
         return -1
     # There's no way to tell the progress...
-    dev.write(opt_data)
+    dev.write(otp_data)
     ack = dev.read(4)
     if int.from_bytes(ack, byteorder="little") != img_length:
         print("Acked size error")
         return -1
+
+    # There's no way to tell the progress...
+    ack = dev.read(4)
+    data = int.from_bytes(ack, byteorder="little")
+    #print(f"Can program count {hex(data)}")
+
     return 0
 
 
@@ -434,17 +665,11 @@ def do_otp_program(opt_file_name) -> None:
         print("Device not found")
         sys.exit(2)
 
-    try:
-        with open("opt_writer.bin", "r") as writer_file:
-            opt_writer = writer_file.read()
-    except (IOError, OSError) as err:
-        print(f"Open {opt_file_name} failed")
-        sys.exit(err)
-
+    load_otp_writer(devices[0])
     otp_data, option = conv_otp(opt_file_name)
 
     with ThreadPoolExecutor(max_workers=8) as executor:
-        futures = [executor.submit(__otp_program, dev, opt_writer, otp_data, option) for dev in devices]
+        futures = [executor.submit(__otp_program, dev, otp_data, option) for dev in devices]
     success = 0
     failed = 0
     for future in as_completed(futures):
@@ -456,6 +681,56 @@ def do_otp_program(opt_file_name) -> None:
     print(f"Successfully programmed {success} device(s)")
     if failed > 0:
         print(f"Failed to program {failed} device(s)")
+
+
+def do_otp_read(media, start, out_file_name, length=0x1, option=OPT_NONE) -> None:
+    global mp_mode
+
+    # devices = XUsbComList(attach_all=mp_mode).get_dev()
+    _XUsbComList = XUsbComList(attach_all=mp_mode)
+    devices = _XUsbComList.get_dev()
+
+    if len(devices) == 0:
+        print("Device not found")
+        sys.exit(2)
+
+    # Only support one device in read function
+    dev = devices[0]
+    load_otp_writer(dev)
+
+    cmd = start.to_bytes(8, byteorder='little')
+    cmd += length.to_bytes(8, byteorder='little')
+    cmd += ACT_READ.to_bytes(4, byteorder='little')
+    cmd += option.to_bytes(4, byteorder='little')
+
+    dev.set_media(media)
+    dev.write(cmd)
+    ack = dev.read(4)
+    if int.from_bytes(ack, byteorder="little") != ACK:
+        print("Receive ACK error")
+        return
+    # FIXME: Don't know real length for "read all"
+    bar = tqdm(total=length, ascii=True)
+    data = b''
+    remain = length
+
+    while remain > 0:
+        ack = dev.read(4)
+        # Get the transfer length of next read
+        xfer_size = int.from_bytes(ack, byteorder="little")
+
+        data += dev.read(xfer_size)
+        dev.write(xfer_size.to_bytes(4, byteorder='little'))    # ack
+        remain -= xfer_size
+        bar.update(xfer_size)
+    try:
+        with open(out_file_name, "wb") as out_file:
+            out_file.write(data[0:length])
+    except (IOError, OSError) as err:
+        print(f"Open {out_file_name} failed")
+        sys.exit(err)
+
+    bar.close()
 
 
 def __pack_program(dev, media, pack_image, option) -> int:
@@ -1482,6 +1757,24 @@ def get_type(img_type) -> int:
         'TEE': IMG_TEE
     }.get(img_type, IMG_DATA)
 
+def get_otpblock(num) -> int:
+    num = str.upper(num)
+    return {
+        'OTP1': OPT_OTPBLK1,
+        'OTP2': OPT_OTPBLK2,
+        'OTP3': OPT_OTPBLK3,
+        'OTP4': OPT_OTPBLK4,
+        'OTP5': OPT_OTPBLK5,
+        'OTP6': OPT_OTPBLK6,
+        'OTP7': OPT_OTPBLK7,
+        'KEY0': OPT_OTPKEY0+OPT_OTPKEY,
+        'KEY1': OPT_OTPKEY1+OPT_OTPKEY,
+        'KEY2': OPT_OTPKEY2+OPT_OTPKEY,
+        'KEY3': OPT_OTPKEY3+OPT_OTPKEY,
+        'KEY4': OPT_OTPKEY4+OPT_OTPKEY,
+        'KEY5': OPT_OTPKEY5+OPT_OTPKEY
+    }.get(num, OPT_UNKNOWN)
+
 
 def main():
     parser = argparse.ArgumentParser()
@@ -1549,6 +1842,8 @@ def main():
     elif args.read:
         # -r spinor all out.bin
         # -r nand 0x1000 0x100 out.bin
+        # -r otp all out.bin (block1 ~ block7)
+        # -r otp blockno 0x4 out.bin
         arg_count = len(args.read)
         if arg_count < 3:
             print("At lease take 3 arguments")
@@ -1556,7 +1851,7 @@ def main():
         media = get_media(args.read[0])
 
         try:
-            if media in [DEV_OTP, DEV_UNKNOWN]:
+            if media == DEV_UNKNOWN:
                 raise ValueError(f"Cannot support read {str.upper(args.read[0])}")
             if arg_count == 3 and str.upper(args.read[1]) != 'ALL':
                 raise ValueError("Unknown arguments")
@@ -1564,15 +1859,25 @@ def main():
             sys.exit(err)
 
         if str.upper(args.read[1]) == 'ALL':
-            do_img_read(media, 0, args.read[2], 0, option)
+            if media == DEV_OTP:
+                do_otp_read(media, 0, args.read[2], 208, option)
+            else:
+                do_img_read(media, 0, args.read[2], 0, option)
         else:
             try:
-                start = int(args.read[1], 0)
+                if media == DEV_OTP:
+                    option = get_otpblock(args.read[1]) | option
+                else:
+                    start = int(args.read[1], 0)
                 length = int(args.read[2], 0)
             except ValueError as err:
                 print("Wrong start/length value")
                 sys.exit(err)
-            do_img_read(media, start, args.read[3], length, option)
+
+            if media == DEV_OTP:
+                do_otp_read(media, 0, args.read[3], length, option)
+            else:
+                do_img_read(media, start, args.read[3], length, option)
 
     elif args.write:
         # -w spinor 0x1000 image.bin
@@ -1612,6 +1917,7 @@ def main():
     elif args.erase:
         # -e spinor all
         # -e nand 0x100000 0x10000 -o withbad
+        # -e otp blockno
         arg_count = len(args.erase)
         if arg_count < 2:
             print("At lease take 2 arguments")
@@ -1619,23 +1925,44 @@ def main():
         media = get_media(args.erase[0])
 
         try:
-            if media in [DEV_DDR_SRAM, DEV_OTP, DEV_SD_EMMC, DEV_UNKNOWN]:
+            if media in [DEV_DDR_SRAM, DEV_SD_EMMC, DEV_UNKNOWN]:
                 raise ValueError(f"{str.upper(args.erase[0])} does not support erase")
-            if arg_count == 2 and str.upper(args.erase[1]) != 'ALL':
+            if arg_count == 2 and str.upper(args.erase[1]) != 'ALL' and media != DEV_OTP:
                 raise ValueError("Unknown arguments")
+            if str.upper(args.erase[1]) == 'ALL' and media == DEV_OTP:
+                raise ValueError("Wrong arguments")
         except ValueError as err:
             sys.exit(err)
 
-        if str.upper(args.erase[1]) == 'ALL':
-            do_img_erase(media, 0, 0, option)
-        else:
+        if media == DEV_OTP:
+            option = get_otpblock(args.erase[1])
             try:
-                start = int(args.erase[1], 0)
-                length = int(args.erase[2], 0)
+                # only can erase block 1, 3, 4
+                if option == OPT_OTPBLK2:
+                    raise ValueError(f"Error block 2, only erase block 1, 3, 4")
+                if option == OPT_OTPBLK5:
+                    raise ValueError(f"Error block 5, only erase block 1, 3, 4")
+                if option == OPT_OTPBLK6:
+                    raise ValueError(f"Error block 6, only erase block 1, 3, 4")
+                if option == OPT_OTPBLK7:
+                    raise ValueError(f"Error block 7, only erase block 1, 3, 4")
+                if option == OPT_UNKNOWN:
+                    raise ValueError(f"Error key number")
             except ValueError as err:
-                print("Wrong start/length value")
                 sys.exit(err)
-            do_img_erase(media, start, length, option)
+            do_otp_erase(option)
+        else:
+            if str.upper(args.erase[1]) == 'ALL':
+                do_img_erase(media, 0, 0, option)
+            else:
+                try:
+                    start = int(args.erase[1], 0)
+                    length = int(args.erase[2], 0)
+                except ValueError as err:
+                    print("Wrong start/length value")
+                    sys.exit(err)
+                do_img_erase(media, start, length, option)
+
     elif args.storage:
         # -s emmc 0x800000
         # -s emmc -o remove
