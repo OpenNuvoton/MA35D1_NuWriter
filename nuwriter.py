@@ -157,7 +157,7 @@ def get_plm(plm) -> int:
     }.get(plm, 0)
 
 
-def conv_otp(opt_file_name) -> tuple[bytearray, int]:
+def conv_otp(opt_file_name) -> (bytearray, int):
     try:
         with open(opt_file_name, "r") as json_file:
             try:
@@ -180,13 +180,13 @@ def conv_otp(opt_file_name) -> tuple[bytearray, int]:
                     if d['boot_cfg']['posotp'] == 'enable':
                         cfg_val |= 1
                 if sub_key == 'qspiclk':
-                    if d['boot_cfg']['qspiclk'] == '60mhz':
+                    if d['boot_cfg']['qspiclk'] == '50mhz':
                         cfg_val |= 2
                 if sub_key == 'wdt0en':
                     if d['boot_cfg']['wdt0en'] == 'enable':
                         cfg_val |= 4
                 if sub_key == 'uart0en':
-                    if d['boot_cfg']['uart0en'] == 'enable':
+                    if d['boot_cfg']['uart0en'] == 'disable':
                         cfg_val |= 0x10
                 if sub_key == 'sd0bken':
                     if d['boot_cfg']['sd0bken'] == 'enable':
@@ -195,7 +195,7 @@ def conv_otp(opt_file_name) -> tuple[bytearray, int]:
                     if d['boot_cfg']['tsiimg'] == 'enable':
                         cfg_val |= 0x40
                 if sub_key == 'tsidbg':
-                    if d['boot_cfg']['tsidbg'] == 'enable':
+                    if d['boot_cfg']['tsidbg'] == 'disable':
                         cfg_val |= 0x80
                 if sub_key == 'bootsrc':
                     if d['boot_cfg']['bootsrc'] == 'sd' or d['boot_cfg']['bootsrc'] == 'emmc':
