@@ -4,11 +4,11 @@ from PyQt5 import QtWidgets, QtCore
 from PyQt5.QtCore import QDateTime, Qt, QTimer
 from PyQt5.QtCore import pyqtSlot, pyqtSignal, QThread
 
-from PyQt5.QtWidgets import (QApplication, QCheckBox, QComboBox, QDateTimeEdit,
-        QDial, QDialog, QGridLayout, QGroupBox, QHBoxLayout, QLabel, QLineEdit,
-        QProgressBar, QPushButton, QRadioButton, QScrollBar, QSizePolicy,
-        QSlider, QSpinBox, QStyleFactory, QTableWidget, QTabWidget, QTextEdit,
-        QVBoxLayout, QFormLayout, QWidget, QButtonGroup)
+from PyQt5.QtWidgets import (QApplication, QButtonGroup, QCheckBox, QComboBox, 
+        QDateTimeEdit, QDial, QDialog, QFormLayout, QGridLayout, QGroupBox, QHBoxLayout,
+        QLabel, QLineEdit, QMessageBox, QProgressBar, QPushButton, QRadioButton,
+        QScrollBar, QSizePolicy, QSlider, QSpinBox, QStyleFactory, QTableWidget,
+        QTabWidget, QTextEdit, QVBoxLayout, QWidget)
 
 import os
 
@@ -29,7 +29,7 @@ OPT_EXECUTE = 2     # For write
 OPT_VERIFY = 3      # For write
 OPT_UNPACK = 4      # For pack
 OPT_RAW = 5         # For write
-OPT_EJECT = 6      # For msc
+OPT_EJECT = 6       # For msc
 
 
 class MediaPage(QWidget):
@@ -38,6 +38,8 @@ class MediaPage(QWidget):
     signalImgRead = pyqtSignal(int, str, str, str, int, bool)
     signalImgErase = pyqtSignal(int, str, str, int, bool)
     signalMscStorage = pyqtSignal(str, int)
+    signalOtpGen = pyqtSignal()
+    signalOtpRB = pyqtSignal()
 
     def __init__(self, media, parent=None):
         super(MediaPage, self).__init__(parent)
@@ -45,16 +47,21 @@ class MediaPage(QWidget):
         self.parent = parent
         self._media = media
 
-
         self.mainLayout = QVBoxLayout()
         self.buttonLayout = QHBoxLayout()
 
-        self.addWriteArgument()
-        self.addReadArgument()
-
-        if media != DEV_DDR_SRAM and media != DEV_SD_EMMC:
+        if media == DEV_OTP:
+            self.addWriteOTPArgument()
+            self.addReadOTPArgument()
+            self.addShowOTPArgument()
+        else:
+            self.addWriteArgument()
+            self.addReadArgument()    
+        
+        if media != DEV_DDR_SRAM and media != DEV_SD_EMMC and media != DEV_OTP:
             self.addEraseArgument()
-
+        #if media == DEV_OTP:  hide right now
+        #    self.addEraseOTPArgument()
         if media == DEV_SD_EMMC:
             self.addStorageArgument()
 
@@ -70,6 +77,18 @@ class MediaPage(QWidget):
             self.signalImgProgram.connect(parent.doImgProgram)
             self.signalImgErase.connect(parent.doImgErase)
             self.signalMscStorage.connect(parent.doMsc)
+            self.signalOtpGen.connect(parent.OTP_generate)
+            self.signalOtpRB.connect(parent.OTP_readback)
+
+    def warning_eraseOTPMedia(self):
+        reply = QMessageBox.warning(self,'Warning','Are you sure to erase OTP?',QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
+        if reply == QMessageBox.Yes:
+            self.eraseOTPMedia()
+            
+    def warning_writeOTPMedia(self):
+        reply = QMessageBox.warning(self,'Warning','WARNING: Unrecoverable damage can occur if the wrong OTP is flashed to the target board! \nAre you sure to write OTP?',QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
+        if reply == QMessageBox.Yes:
+            self.writeOTPMedia()
 
     def onRadioToggled(self):
 
@@ -94,10 +113,9 @@ class MediaPage(QWidget):
 
         writeLayout.addRow(QLabel("Image file"), imgFileLayout)
 
-        if self._media != DEV_DDR_SRAM:
+        if self._media != DEV_DDR_SRAM and self._media != DEV_OTP:
             self.radioData = QRadioButton("Data")
             self.radioPack = QRadioButton("Pack")
-
 
             self.btngroup1 = QButtonGroup()
             self.btngroup1.addButton(self.radioData)
@@ -114,11 +132,7 @@ class MediaPage(QWidget):
             writeLayout.addRow(QLabel("Image type"), imgTypeLayout)
 
         self.imgAddress = QLineEdit('')
-
-        writeLayout.addRow(QLabel("Image addr."), self.imgAddress)
-
-        # if option == OPT_RAW and media != DEV_NAND:
-        #     raise ValueError(f"Do not support raw write on {str.upper(args.write[0])}")
+        writeLayout.addRow(QLabel("Image addr."), self.imgAddress)    
 
         if self._media == DEV_NAND:
             self.normalWrite = QRadioButton('None')
@@ -144,7 +158,36 @@ class MediaPage(QWidget):
         writeButton = QPushButton('Write')
         writeButton.clicked.connect(self.writeMedia)
         self.buttonLayout.addWidget(writeButton)
+    
+    def addWriteOTPArgument(self):
 
+        writeGroup = QGroupBox("Write")
+        writeLayout = QFormLayout()
+
+        imgBrowseButton = QPushButton('Browse')
+        imgBrowseButton.clicked.connect(self.pathBrowseOTP)
+
+        self.imgPathLine = QLineEdit('')
+
+        imgFileLayout = QHBoxLayout()
+        imgFileLayout.addWidget(self.imgPathLine)
+        imgFileLayout.addWidget(imgBrowseButton)
+
+        writeLayout.addRow(QLabel("OTP json"), imgFileLayout)
+        
+        otp_genButton = QPushButton('Generate otp.json')
+        writeLayout.addRow(QLabel(" "), otp_genButton)
+        otp_genButton.clicked.connect(self.OTP_generate)        
+
+        writeGroup.setLayout(writeLayout)
+        self.mainLayout.addWidget(writeGroup)
+
+        # Write Button
+        writeButton = QPushButton('Write')
+        writeButton.clicked.connect(self.warning_writeOTPMedia)
+        self.buttonLayout.addWidget(writeButton)
+    
+    
     def addReadArgument(self):
         group = QGroupBox("Read")
         layout = QFormLayout()
@@ -160,12 +203,12 @@ class MediaPage(QWidget):
         self.readStart = QLineEdit('')
         self.readEnd = QLineEdit('')
         self.readAll = QCheckBox('ALL')
-        self.readAll.setVisible(False)
 
         self.readAll.stateChanged.connect(lambda checked: (self.readStart.setEnabled(not checked), self.readEnd.setEnabled(not checked)))
 
         _rangeLayout.addWidget(self.readStart)
         _rangeLayout.addWidget(QLabel("-"))
+            
         _rangeLayout.addWidget(self.readEnd)
         _rangeLayout.addWidget(self.readAll)
 
@@ -174,7 +217,7 @@ class MediaPage(QWidget):
 
         if self._media in [DEV_NAND, DEV_SPINAND]:
             self.readWithBad = QCheckBox('With Bad')
-            layout.addRow(QLabel("Option"), self.readWithBad)
+            layout.addRow(QLabel("Option"), self.readWithBad) 
 
         group.setLayout(layout)
         self.mainLayout.addWidget(group)
@@ -183,7 +226,44 @@ class MediaPage(QWidget):
         readButton = QPushButton('Read')
         readButton.clicked.connect(self.readMedia)
         self.buttonLayout.addWidget(readButton)
+    
+    def addReadOTPArgument(self):
+        group = QGroupBox("Read")
+        layout = QFormLayout()
 
+        _fileLayout = QHBoxLayout()
+        self.fileSave = QLineEdit('')
+        browseButton = QPushButton('Browse')
+        browseButton.clicked.connect(self.saveFileOTP)
+        _fileLayout.addWidget(self.fileSave)
+        _fileLayout.addWidget(browseButton)
+
+        _rangeLayout = QHBoxLayout()
+        self.readStart = QComboBox(self)
+        self.readEnd = QLineEdit('')
+        self.readStart.addItems(['','OTP1','OTP3','OTP4','OTP5','OTP6',
+                                'OTP7','KEY0','KEY1','KEY2','KEY3','KEY4','KEY5'])
+        self.readAll = QCheckBox('ALL')
+
+        self.readAll.stateChanged.connect(lambda checked: (self.readStart.setEnabled(not checked), self.readEnd.setEnabled(not checked)))
+
+        _rangeLayout.addWidget(self.readStart)
+        _rangeLayout.addWidget(QLabel("Length"))
+            
+        _rangeLayout.addWidget(self.readEnd)
+        _rangeLayout.addWidget(self.readAll)
+
+        layout.addRow(QLabel("Save file"), _fileLayout)
+        layout.addRow(QLabel("Block"), _rangeLayout)
+        
+        group.setLayout(layout)
+        self.mainLayout.addWidget(group)
+
+        # Read Button
+        readButton = QPushButton('Read')
+        readButton.clicked.connect(self.readOTPMedia)
+        self.buttonLayout.addWidget(readButton)
+        
     def addEraseArgument(self):
         group = QGroupBox("Erase")
         layout = QFormLayout()
@@ -209,6 +289,51 @@ class MediaPage(QWidget):
         eraseButton = QPushButton('Erase')
         eraseButton.clicked.connect(self.eraseMedia)
         self.buttonLayout.addWidget(eraseButton)
+        '''
+    def addEraseOTPArgument(self):
+        group = QGroupBox("Erase")
+        layout = QFormLayout()
+        
+        _rangeLayout = QHBoxLayout()
+        self.eraseOTP1 = QRadioButton('Erase Block 1')
+        self.eraseOTP3 = QRadioButton('Erase Block 3')
+        self.eraseOTP4 = QRadioButton('Erase Block 4')
+
+        _rangeLayout.addWidget(self.eraseOTP1)
+        _rangeLayout.addWidget(self.eraseOTP3)
+        _rangeLayout.addWidget(self.eraseOTP4)
+
+        layout.addRow(QLabel("Erase    "), _rangeLayout)
+
+        group.setLayout(layout)
+        self.mainLayout.addWidget(group)
+
+        # Erase Button
+        eraseButton = QPushButton('Erase')
+        #eraseButton.clicked.connect(self.eraseOTPMedia) # hide right now
+        eraseButton.clicked.connect(self.warning_eraseOTPMedia)
+        self.buttonLayout.addWidget(eraseButton)
+        '''
+        
+    def addShowOTPArgument(self):
+        group = QGroupBox("Show")
+        layout = QFormLayout()
+
+        _fileLayout = QHBoxLayout()
+        self.fileShow = QLineEdit('')
+        browseButton = QPushButton('Browse')
+        browseButton.clicked.connect(self.showFile)
+        _fileLayout.addWidget(self.fileShow)
+        _fileLayout.addWidget(browseButton)
+
+        layout.addRow(QLabel("OTP bin"), _fileLayout)
+
+        otp_genButton = QPushButton('Show OTP')
+        layout.addRow(QLabel(" "), otp_genButton)
+        otp_genButton.clicked.connect(self.OTP_readback)   
+
+        group.setLayout(layout)
+        self.mainLayout.addWidget(group)
 
     def addStorageArgument(self):
 
@@ -226,7 +351,6 @@ class MediaPage(QWidget):
         _storageLayout.addRow(QLabel("Reserved size"), self.reservedSize)
         _storageLayout.addRow(QLabel("Option"), _optLayout)
 
-        # _reservedLayout = QHBoxLayout()
         _storageGroup.setLayout(_storageLayout)
         self.mainLayout.addWidget(_storageGroup)
 
@@ -236,6 +360,12 @@ class MediaPage(QWidget):
         storageButton = QPushButton('Storage')
         storageButton.clicked.connect(self.storageMSC)
         self.buttonLayout.addWidget(storageButton)
+    
+    def OTP_generate(self):
+        self.signalOtpGen.emit()
+        
+    def OTP_readback(self):
+        self.signalOtpRB.emit()
 
     def writeMedia(self):
         _file = self.imgPathLine.text()
@@ -263,6 +393,12 @@ class MediaPage(QWidget):
                 _option = OPT_VERIFY
 
         self.signalImgProgram.emit(_media, _address , _file, _option, _ispack)
+    
+    def writeOTPMedia(self):
+        _file = self.imgPathLine.text()
+        _media = self._media
+        
+        self.signalImgProgram.emit(_media, '0' , _file, OPT_NONE, False)
 
     def readMedia(self):
         _file = self.fileSave.text()
@@ -277,6 +413,35 @@ class MediaPage(QWidget):
             _option = OPT_WITHBAD
 
         self.signalImgRead.emit(_media, _start , _file, _end, _option, _isall)
+            
+    def readOTPMedia(self):
+        _file = self.fileSave.text()
+        _start = self.readStart.currentText()
+        _end = self.readEnd.text()
+        _media = self._media
+        _isall = self.readAll.isChecked()
+
+        _option = OPT_NONE
+        option_index = {
+            '': 0x0,
+            'OTP1': 0x100,
+            'OTP3': 0x400,
+            'OTP4': 0x800,
+            'OTP5': 0x1000,
+            'OTP6': 0x2000,
+            'OTP7': 0x4000,
+            'KEY0': 0x10000+0x8000,
+            'KEY1': 0x20000+0x8000,
+            'KEY2': 0x40000+0x8000,
+            'KEY3': 0x80000+0x8000,
+            'KEY4': 0x100000+0x8000,
+            'KEY5': 0x200000+0x8000
+        }
+        #print(f"option_index.get(_start)")
+        if not(_isall):
+            _option |= option_index.get(_start)
+
+        self.signalImgRead.emit(_media, _start , _file, _end, _option, _isall)  
 
     def eraseMedia(self):
         _start = self.eraseStart.text()
@@ -284,6 +449,17 @@ class MediaPage(QWidget):
         _media = self._media
         _isall = self.eraseAll.isChecked()
         self.signalImgErase.emit(_media, _start , _end, 0, _isall)
+        
+    def eraseOTPMedia(self):
+        _media = self._media
+        _option = 0x100
+        if self.eraseOTP1.isChecked():
+            _option = 0x100
+        elif self.eraseOTP3.isChecked():
+            _option = 0x400
+        elif self.eraseOTP4.isChecked():
+            _option = 0x800
+        self.signalImgErase.emit(_media, '0' , '0', _option, False)
 
     def storageMSC(self):
         mscSize = self.reservedSize.text()
@@ -304,6 +480,14 @@ class MediaPage(QWidget):
 
         if filename != "":
             self.imgPathLine.setText(filename)
+    
+    def pathBrowseOTP(self):
+        filename = ""
+        # Fix for crash in X on Ubuntu 14.04
+        filename, _ = QtWidgets.QFileDialog.getOpenFileName(filter = "json(*.json)")
+
+        if filename != "":
+            self.imgPathLine.setText(filename)
 
     def saveFile(self):
         fileName, _ = QtWidgets.QFileDialog.getSaveFileName(self,
@@ -313,4 +497,24 @@ class MediaPage(QWidget):
 
         if fileName != "":
             self.fileSave.setText(fileName)
+            return
+            
+    def saveFileOTP(self):
+        fileName, _ = QtWidgets.QFileDialog.getSaveFileName(self,
+                                    "save file",
+                                    os.getcwd(),
+                                    "bin(*.bin)")
+
+        if fileName != "":
+            self.fileSave.setText(fileName)
+            return
+            
+    def showFile(self):
+        fileName, _ = QtWidgets.QFileDialog.getOpenFileName(self,
+                                    "save file",
+                                    os.getcwd(),
+                                    "bin(*.bin)")
+
+        if fileName != "":
+            self.fileShow.setText(fileName)
             return

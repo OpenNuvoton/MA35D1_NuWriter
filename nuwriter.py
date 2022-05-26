@@ -182,8 +182,8 @@ def conv_otp(opt_file_name) -> (bytearray, int):
                 if sub_key == 'qspiclk':
                     if d['boot_cfg']['qspiclk'] == '50mhz':
                         cfg_val |= 2
-                if sub_key == 'wdt0en':
-                    if d['boot_cfg']['wdt0en'] == 'enable':
+                if sub_key == 'wdt1en':
+                    if d['boot_cfg']['wdt1en'] == 'enable':
                         cfg_val |= 4
                 if sub_key == 'uart0en':
                     if d['boot_cfg']['uart0en'] == 'disable':
@@ -205,11 +205,11 @@ def conv_otp(opt_file_name) -> (bytearray, int):
                     elif d['boot_cfg']['bootsrc'] == 'usb':
                         cfg_val |= 0xC00
                 if sub_key == 'page':
-                    if d['boot_cfg']['page'] == '4k':
+                    if d['boot_cfg']['page'] == '2k':
                         cfg_val |= 0x1000
-                    elif d['boot_cfg']['page'] == '8k':
+                    elif d['boot_cfg']['page'] == '4k':
                         cfg_val |= 0x2000
-                    elif d['boot_cfg']['page'] == 'ignore':
+                    elif d['boot_cfg']['page'] == '8k':
                         cfg_val |= 0x3000
                 if sub_key == 'option':
                     if d['boot_cfg']['option'] == 'sd1' or d['boot_cfg']['option'] == 'emmc1' or \
@@ -217,7 +217,7 @@ def conv_otp(opt_file_name) -> (bytearray, int):
                         cfg_val |= 0x4000
                     elif d['boot_cfg']['option'] == 't24' or d['boot_cfg']['option'] == 'spinor1':
                         cfg_val |= 0x8000
-                    elif d['boot_cfg']['option'] == 'ignore' or d['boot_cfg']['option'] == 'spinor4':
+                    elif d['boot_cfg']['option'] == 'noecc' or d['boot_cfg']['option'] == 'spinor4':
                         cfg_val |= 0xC000
                 if sub_key == 'secboot':
                     if d['boot_cfg']['secboot'] == 'disable':
@@ -262,122 +262,65 @@ def conv_otp(opt_file_name) -> (bytearray, int):
                 print("HUK0 is 128-bit")
                 sys.exit(2)
             newkey += b'\x00' * (32 - len(newkey))
-            newkey += int(d['huk0']['size'], 0).to_bytes(4, byteorder='little')
+            # size - 128-bit
+            newkey += b'\x08\x00\x00\x00'
+            # key number - 0
             newkey += b'\x00\x00\x00\x00'
-
-            if d['huk0']['meta'] == 'aes':
-                newkey += b'\x00\x00\x00\x80'
-            elif d['huk0']['meta'] == 'aes-lock':
-                option |= OPT_OTPKEY0;
-                newkey += b'\x00\x00\x00\x80'
-            elif d['huk0']['meta'] == 'hmac':
-                newkey += b'\x00\x00\x01\x80'
-            elif d['huk0']['meta'] == 'hmac-lock':
-                option |= OPT_OTPKEY0;
-                newkey += b'\x00\x00\x01\x80'
-            elif d['huk0']['meta'] == 'ecc':
-                newkey += b'\x00\x00\x04\x80'
-            elif d['huk0']['meta'] == 'ecc-lock':
-                option |= OPT_OTPKEY0;
-                newkey += b'\x00\x00\x04\x80'
-            elif d['huk0']['meta'] == 'cpu':
-                newkey += b'\x00\x00\x05\x80'
-            elif d['huk0']['meta'] == 'cpu-lock':
-                option |= OPT_OTPKEY0;
-                newkey += b'\x00\x00\x05\x80'
-
+            # meta - owner: cpu, cpu readable
+            newkey += b'\x04\x00\x05\x80'
             data += newkey
+
         elif key == 'huk1':
             newkey = bytes.fromhex(d['huk1']['key'])
             if len(newkey) != 16:
                 print("HUK1 is 128-bit")
                 sys.exit(2)
             newkey += b'\x00' * (32 - len(newkey))
-            newkey += int(d['huk1']['size'], 0).to_bytes(4, byteorder='little')
+            # size - 128-bit
+            newkey += b'\x08\x00\x00\x00'
+            # key number - 1
             newkey += b'\x01\x00\x00\x00'
-
-            if d['huk1']['meta'] == 'aes':
-                newkey += b'\x00\x00\x00\x80'
-            elif d['huk1']['meta'] == 'aes-lock':
-                option |= OPT_OTPKEY1;
-                newkey += b'\x00\x00\x00\x80'
-            elif d['huk1']['meta'] == 'hmac':
-                newkey += b'\x00\x00\x01\x80'
-            elif d['huk1']['meta'] == 'hmac-lock':
-                option |= OPT_OTPKEY1;
-                newkey += b'\x00\x00\x01\x80'
-            elif d['huk1']['meta'] == 'ecc':
-                newkey += b'\x00\x00\x04\x80'
-            elif d['huk1']['meta'] == 'ecc-lock':
-                option |= OPT_OTPKEY1;
-                newkey += b'\x00\x00\x04\x80'
-            elif d['huk1']['meta'] == 'cpu':
-                newkey += b'\x00\x00\x05\x80'
-            elif d['huk1']['meta'] == 'cpu-lock':
-                option |= OPT_OTPKEY1;
-                newkey += b'\x00\x00\x05\x80'
-
+            # meta - owner: cpu, cpu readable
+            newkey += b'\x04\x00\x05\x80'
             data += newkey
+
         elif key == 'huk2':
             newkey = bytes.fromhex(d['huk2']['key'])
             if len(newkey) != 16:
                 print("HUK0 is 128-bit")
                 sys.exit(2)
             newkey += b'\x00' * (32 - len(newkey))
-            newkey += int(d['huk2']['size'], 0).to_bytes(4, byteorder='little')
+            # size - 128-bit
+            newkey += b'\x08\x00\x00\x00'
+            # key number - 2
             newkey += b'\x02\x00\x00\x00'
-
-            if d['huk2']['meta'] == 'aes':
-                newkey += b'\x00\x00\x00\x80'
-            elif d['huk2']['meta'] == 'aes-lock':
-                option |= OPT_OTPKEY2;
-                newkey += b'\x00\x00\x00\x80'
-            elif d['huk2']['meta'] == 'hmac':
-                newkey += b'\x00\x00\x01\x80'
-            elif d['huk2']['meta'] == 'hmac-lock':
-                option |= OPT_OTPKEY2;
-                newkey += b'\x00\x00\x01\x80'
-            elif d['huk2']['meta'] == 'ecc':
-                newkey += b'\x00\x00\x04\x80'
-            elif d['huk2']['meta'] == 'ecc-lock':
-                option |= OPT_OTPKEY2;
-                newkey += b'\x00\x00\x04\x80'
-            elif d['huk2']['meta'] == 'cpu':
-                newkey += b'\x00\x00\x05\x80'
-            elif d['huk2']['meta'] == 'cpu-lock':
-                option |= OPT_OTPKEY2;
-                newkey += b'\x00\x00\x05\x80'
-
+            # meta - owner: cpu, cpu readable
+            newkey += b'\x04\x00\x05\x80'
             data += newkey
+
         elif key == 'key3':
             newkey = bytes.fromhex(d['key3']['key'])
             if len(newkey) != 32:
                 print("key3 is 256-bit")
                 sys.exit(2)
             newkey += b'\x00' * (32 - len(newkey))
-            newkey += int(d['key3']['size'], 0).to_bytes(4, byteorder='little')
+            # size - 256-bit
+            newkey += b'\x00\x01\x00\x00'
+            # key number - 3
             newkey += b'\x03\x00\x00\x00'
 
-            if d['key3']['meta'] == 'aes':
-                newkey += b'\x00\x00\x00\x80'
-            elif d['key3']['meta'] == 'aes-lock':
-                option |= OPT_OTPKEY3;
-                newkey += b'\x00\x00\x00\x80'
-            elif d['key3']['meta'] == 'hmac':
-                newkey += b'\x00\x00\x01\x80'
-            elif d['key3']['meta'] == 'hmac-lock':
-                option |= OPT_OTPKEY3;
-                newkey += b'\x00\x00\x01\x80'
-            elif d['key3']['meta'] == 'ecc':
-                newkey += b'\x00\x00\x04\x80'
-            elif d['key3']['meta'] == 'ecc-lock':
-                option |= OPT_OTPKEY3;
-                newkey += b'\x00\x00\x04\x80'
-            elif d['key3']['meta'] == 'cpu':
-                newkey += b'\x00\x00\x05\x80'
-            elif d['key3']['meta'] == 'cpu-lock':
-                option |= OPT_OTPKEY3;
-                newkey += b'\x00\x00\x05\x80'
+            if d['key3']['meta'] == 'aes256-unreadable':
+                newkey += b'\x00\x06\x00\x80'
+            elif d['key3']['meta'] == 'aes256-cpu-readable':
+                newkey += b'\x04\x06\x00\x80'
+            elif d['key3']['meta'] == 'sha256-unreadable':
+                newkey += b'\x00\x06\x01\x80'
+            elif d['key3']['meta'] == 'sha256-cpu-readable':
+                newkey += b'\x04\x06\x01\x80'
+            elif d['key3']['meta'] == 'eccp256-unreadable':
+                newkey += b'\x00\x06\x04\x80'
+            elif d['key3']['meta'] == 'eccp256-cpu-readable':
+                newkey += b'\x04\x06\x04\x80'
 
             data += newkey
         elif key == 'key4':
@@ -386,29 +329,23 @@ def conv_otp(opt_file_name) -> (bytearray, int):
                 print("key4 is 256-bit")
                 sys.exit(2)
             newkey += b'\x00' * (32 - len(newkey))
-            newkey += int(d['key4']['size'], 0).to_bytes(4, byteorder='little')
+            # size - 256-bit
+            newkey += b'\x00\x01\x00\x00'
+            # key number - 4
             newkey += b'\x04\x00\x00\x00'
 
-            if d['key4']['meta'] == 'aes':
-                newkey += b'\x00\x00\x00\x80'
-            elif d['key4']['meta'] == 'aes-lock':
-                option |= OPT_OTPKEY4;
-                newkey += b'\x00\x00\x00\x80'
-            elif d['key4']['meta'] == 'hmac':
-                newkey += b'\x00\x00\x01\x80'
-            elif d['key4']['meta'] == 'hmac-lock':
-                option |= OPT_OTPKEY4;
-                newkey += b'\x00\x00\x01\x80'
-            elif d['key4']['meta'] == 'ecc':
-                newkey += b'\x00\x00\x04\x80'
-            elif d['key4']['meta'] == 'ecc-lock':
-                option |= OPT_OTPKEY4;
-                newkey += b'\x00\x00\x04\x80'
-            elif d['key4']['meta'] == 'cpu':
-                newkey += b'\x00\x00\x05\x80'
-            elif d['key4']['meta'] == 'cpu-lock':
-                option |= OPT_OTPKEY4;
-                newkey += b'\x00\x00\x05\x80'
+            if d['key4']['meta'] == 'aes256-unreadable':
+                newkey += b'\x00\x06\x00\x80'
+            elif d['key4']['meta'] == 'aes256-cpu-readable':
+                newkey += b'\x04\x06\x00\x80'
+            elif d['key4']['meta'] == 'sha256-unreadable':
+                newkey += b'\x00\x06\x01\x80'
+            elif d['key4']['meta'] == 'sha256-cpu-readable':
+                newkey += b'\x04\x06\x01\x80'
+            elif d['key4']['meta'] == 'eccp256-unreadable':
+                newkey += b'\x00\x06\x04\x80'
+            elif d['key4']['meta'] == 'eccp256-cpu-readable':
+                newkey += b'\x04\x06\x04\x80'
 
             data += newkey
         elif key == 'key5':
@@ -417,29 +354,23 @@ def conv_otp(opt_file_name) -> (bytearray, int):
                 print("key5 is 256-bit")
                 sys.exit(2)
             newkey += b'\x00' * (32 - len(newkey))
-            newkey += int(d['key5']['size'], 0).to_bytes(4, byteorder='little')
+            # size - 256-bit
+            newkey += b'\x00\x01\x00\x00'
+            # key number - 5
             newkey += b'\x05\x00\x00\x00'
 
-            if d['key5']['meta'] == 'aes':
-                newkey += b'\x00\x00\x00\x80'
-            elif d['key5']['meta'] == 'aes-lock':
-                option |= OPT_OTPKEY5;
-                newkey += b'\x00\x00\x00\x80'
-            elif d['key5']['meta'] == 'hmac':
-                newkey += b'\x00\x00\x01\x80'
-            elif d['key5']['meta'] == 'hmac-lock':
-                option |= OPT_OTPKEY5;
-                newkey += b'\x00\x00\x01\x80'
-            elif d['key5']['meta'] == 'ecc':
-                newkey += b'\x00\x00\x04\x80'
-            elif d['key5']['meta'] == 'ecc-lock':
-                option |= OPT_OTPKEY5;
-                newkey += b'\x00\x00\x04\x80'
-            elif d['key5']['meta'] == 'cpu':
-                newkey += b'\x00\x00\x05\x80'
-            elif d['key5']['meta'] == 'cpu-lock':
-                option |= OPT_OTPKEY5;
-                newkey += b'\x00\x00\x05\x80'
+            if d['key5']['meta'] == 'aes256-unreadable':
+                newkey += b'\x00\x06\x00\x80'
+            elif d['key5']['meta'] == 'aes256-cpu-readable':
+                newkey += b'\x04\x06\x00\x80'
+            elif d['key5']['meta'] == 'sha256-unreadable':
+                newkey += b'\x00\x06\x01\x80'
+            elif d['key5']['meta'] == 'sha256-cpu-readable':
+                newkey += b'\x04\x06\x01\x80'
+            elif d['key5']['meta'] == 'eccp256-unreadable':
+                newkey += b'\x00\x06\x04\x80'
+            elif d['key5']['meta'] == 'eccp256-cpu-readable':
+                newkey += b'\x04\x06\x04\x80'
 
             data += newkey
         elif key == 'publicx':
@@ -469,6 +400,13 @@ def conv_otp(opt_file_name) -> (bytearray, int):
             data += b'\x00\x01\x00\x00'    # 256 bits
             data += b'\x08\x00\x00\x00'
             data += b'\x11\x06\x00\x80'
+
+    try:
+        with open("otp_data.bin", "wb") as out_file:
+            out_file.write(data[0:len(data)])
+    except (IOError, OSError) as err:
+        print(f"Open otp_data.bin failed")
+        sys.exit(err)
 
     if len(data) > 208:
         option |= OPT_OTPKEY
@@ -1860,7 +1798,8 @@ def main():
 
         if str.upper(args.read[1]) == 'ALL':
             if media == DEV_OTP:
-                do_otp_read(media, 0, args.read[2], 208, option)
+                option |= 0x3fff00
+                do_otp_read(media, 0, args.read[2], 352, option)
             else:
                 do_img_read(media, 0, args.read[2], 0, option)
         else:
@@ -1995,4 +1934,5 @@ def main():
 
 # Here goes the main function
 if __name__ == "__main__":
+    #os.system("start cmd.exe") #Call do it. Will open cmd window in each process
     main()
