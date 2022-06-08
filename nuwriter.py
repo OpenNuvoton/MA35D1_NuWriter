@@ -381,7 +381,7 @@ def conv_otp(opt_file_name) -> (bytearray, int):
             data += bytes.fromhex(d['publicx'])
             data += b'\x00\x01\x00\x00'    # 256 bits
             data += b'\x06\x00\x00\x00'
-            data += b'\x11\x06\x04\x80'
+            data += b'\x01\x06\x04\x80'
         elif key == 'publicy':
             newkey = bytes.fromhex(d['publicy'])
             if len(newkey) != 32:
@@ -390,7 +390,7 @@ def conv_otp(opt_file_name) -> (bytearray, int):
             data += bytes.fromhex(d['publicy'])
             data += b'\x00\x01\x00\x00'    # 256 bits
             data += b'\x07\x00\x00\x00'
-            data += b'\x11\x06\x04\x80'
+            data += b'\x01\x06\x04\x80'
         elif key == 'aeskey':
             newkey = bytes.fromhex(d['aeskey'])
             if len(newkey) != 32:
@@ -399,7 +399,7 @@ def conv_otp(opt_file_name) -> (bytearray, int):
             data += bytes.fromhex(d['aeskey'])
             data += b'\x00\x01\x00\x00'    # 256 bits
             data += b'\x08\x00\x00\x00'
-            data += b'\x11\x06\x00\x80'
+            data += b'\x01\x06\x00\x80'
 
     try:
         with open("otp_data.bin", "wb") as out_file:
