@@ -37,7 +37,7 @@ class MediaPage(QWidget):
     signalImgProgram = pyqtSignal(int, str, str, int, bool)
     signalImgRead = pyqtSignal(int, str, str, str, int, bool)
     signalImgErase = pyqtSignal(int, str, str, int, bool)
-    signalMscStorage = pyqtSignal(str, int)
+    #signalMscStorage = pyqtSignal(str, int)
     signalOtpGen = pyqtSignal()
     signalOtpRB = pyqtSignal()
 
@@ -62,8 +62,8 @@ class MediaPage(QWidget):
             self.addEraseArgument()
         #if media == DEV_OTP:  hide right now
         #    self.addEraseOTPArgument()
-        if media == DEV_SD_EMMC:
-            self.addStorageArgument()
+        #if media == DEV_SD_EMMC:
+            #self.addStorageArgument()
 
         self.mainLayout.addStretch()
         buttonGroup = QGroupBox('')
@@ -76,7 +76,7 @@ class MediaPage(QWidget):
             self.signalImgRead.connect(parent.doImgRead)
             self.signalImgProgram.connect(parent.doImgProgram)
             self.signalImgErase.connect(parent.doImgErase)
-            self.signalMscStorage.connect(parent.doMsc)
+            #self.signalMscStorage.connect(parent.doMsc)
             self.signalOtpGen.connect(parent.OTP_generate)
             self.signalOtpRB.connect(parent.OTP_readback)
 
@@ -143,13 +143,13 @@ class MediaPage(QWidget):
             _optLayout.addWidget(self.rawWrite)
             _optLayout.addWidget(self.verifyWrite)
             _optLayout.addStretch()
-            writeLayout.addRow(QLabel("Option"), _optLayout)
+            #writeLayout.addRow(QLabel("Option"), _optLayout)
         elif self._media == DEV_DDR_SRAM:
             self.optExecute = QCheckBox('Execute after download')
-            writeLayout.addRow(QLabel("Option"), self.optExecute)
+            #writeLayout.addRow(QLabel("Option"), self.optExecute)
         else:
             self.verifyWrite = QCheckBox('Verify')
-            writeLayout.addRow(QLabel("Option"), self.verifyWrite)
+            #writeLayout.addRow(QLabel("Option"), self.verifyWrite)
 
         writeGroup.setLayout(writeLayout)
         self.mainLayout.addWidget(writeGroup)
@@ -217,7 +217,7 @@ class MediaPage(QWidget):
 
         if self._media in [DEV_NAND, DEV_SPINAND]:
             self.readWithBad = QCheckBox('With Bad')
-            layout.addRow(QLabel("Option"), self.readWithBad) 
+            #layout.addRow(QLabel("Option"), self.readWithBad) 
 
         group.setLayout(layout)
         self.mainLayout.addWidget(group)
@@ -334,7 +334,7 @@ class MediaPage(QWidget):
 
         group.setLayout(layout)
         self.mainLayout.addWidget(group)
-
+        '''
     def addStorageArgument(self):
 
         self.reservedSize = QLineEdit('')
@@ -360,7 +360,7 @@ class MediaPage(QWidget):
         storageButton = QPushButton('Storage')
         storageButton.clicked.connect(self.storageMSC)
         self.buttonLayout.addWidget(storageButton)
-    
+        '''
     def OTP_generate(self):
         self.signalOtpGen.emit()
         
@@ -460,7 +460,7 @@ class MediaPage(QWidget):
         elif self.eraseOTP4.isChecked():
             _option = 0x800
         self.signalImgErase.emit(_media, '0' , '0', _option, False)
-
+        '''
     def storageMSC(self):
         mscSize = self.reservedSize.text()
 
@@ -471,7 +471,7 @@ class MediaPage(QWidget):
             option = 0
 
         self.signalMscStorage.emit(mscSize , option)
-
+        '''
 
     def pathBrowse(self):
         filename = ""

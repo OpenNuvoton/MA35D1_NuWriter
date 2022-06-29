@@ -189,6 +189,10 @@ class PovPage(QWidget):
         LayoutBit14.addWidget(self._bit14_10, 1, 0)
         LayoutBit14.addWidget(self._bit14_11, 1, 1)
         self._GroupBit14.setLayout(LayoutBit14)
+        
+        self._bitsec = QCheckBox("Secure boot Disable Bit")
+        LayoutSec = QGridLayout()
+        LayoutSec.addWidget(self._bitsec, 0, 0)
 
         _GroupValue = QGroupBox("Power-on Value")
         LayoutValue = QHBoxLayout()
@@ -247,6 +251,7 @@ class PovPage(QWidget):
         mainLayout.addWidget(_GroupBit10)
         mainLayout.addWidget(_GroupBit12)
         mainLayout.addWidget(self._GroupBit14)
+        mainLayout.addLayout(LayoutSec)
         mainLayout.addStretch()
         mainLayout.addWidget(_GroupValue)
 
@@ -774,6 +779,9 @@ class OtpPage(QWidget):
         else :
             self.povPage._bit14_00.setChecked(True)
             self.povPage.updateBits(14, 0, 2)
+            
+        if block_1 & 0x5A000000:
+            self.povPage._bitsec.setChecked(True)
         
         style_sheet = "color: black; background-color: white"
         
@@ -824,6 +832,9 @@ class OtpPage(QWidget):
         self.povPage._bit14_01.setStyleSheet(style_sheet)
         self.povPage._bit14_10.setStyleSheet(style_sheet)
         self.povPage._bit14_11.setStyleSheet(style_sheet)
+        
+        self.povPage._bitsec.setEnabled(False)
+        self.povPage._bitsec.setStyleSheet(style_sheet)
         
         #dpm_plm hide right now 
         #block_2_d = int.from_bytes(d[4:8], byteorder='little')
@@ -1019,6 +1030,9 @@ class OtpPage(QWidget):
                 elif d['boot_cfg'].get('page')  == "8k":
                     self.povPage._bit12_11.setChecked(True)
                     self.povPage.updateBits(12, 3, 2)
+                
+                if d['boot_cfg'].get('secboot') == "disable":
+                    self.povPage._bitsec.setChecked(True)
            
             #dpm_plm fill (hide right now) 
                 '''    
@@ -1223,7 +1237,10 @@ class OtpPage(QWidget):
                 
                 boot_cfg["option"] = _option[bootsrc]
 
-                
+            sec = self.povPage._bitsec.isChecked()
+            if sec:
+                boot_cfg["secboot"] = "disable"
+            
             self.otp_dict["boot_cfg"] = boot_cfg
     
     # DPM/PLM Hide Right Now

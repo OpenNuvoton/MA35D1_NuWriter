@@ -97,6 +97,8 @@ class Ui(QtWidgets.QMainWindow, Ui_MainWindow):
         
         self.tabWidget.setTabVisible(1,self.dev_mode)
         self.tabWidget.setTabVisible(2,self.dev_mode)
+        self.tabMedia.setTabVisible(0,self.dev_mode)
+        self.tabMedia.setTabVisible(3,self.dev_mode)
         
         self.tabMedia.setTabVisible(5,self.otp_mode)
         
@@ -112,6 +114,8 @@ class Ui(QtWidgets.QMainWindow, Ui_MainWindow):
         
         self.tabWidget.setTabVisible(1,self.dev_mode)
         self.tabWidget.setTabVisible(2,self.dev_mode)
+        self.tabMedia.setTabVisible(0,self.dev_mode)
+        self.tabMedia.setTabVisible(3,self.dev_mode)
         
     def otp_mode_check(self):
         self.otp_mode = not self.otp_mode
@@ -119,10 +123,10 @@ class Ui(QtWidgets.QMainWindow, Ui_MainWindow):
         self.tabMedia.setTabVisible(5,self.otp_mode)
 
     def showLicense(self):
-        reply = QtWidgets.QMessageBox.about(self,'License',' NuWriterGUI Version: 0.01 \n\n NuWriterGUI is based on pyQt5 ')
+        reply = QtWidgets.QMessageBox.about(self,'License',' NuWriterGUI Version: 1.00 \n\n NuWriterGUI is based on pyQt5 ')
     
     def showManual(self):
-        manual_path = "UM_EN_MA35D1_NuWriter_V0.90.pdf"
+        manual_path = "UM_EN_MA35D1_NuWriter.pdf"
         open_new(manual_path)
     
     def checkBox_a_ChangedAction(self):
@@ -315,10 +319,11 @@ class Ui(QtWidgets.QMainWindow, Ui_MainWindow):
             if section == 'DDR':
                 continue
 
-            if section == 'SD':
-                page.reservedSize.setText(self.conf.get(section, 'storage size', fallback=''))
-                page.optEject.setChecked(self.conf.get(section, 'storage option', fallback='') == 'Eject')
-            elif section == 'OTP':    
+            #if section == 'SD':
+            #    page.reservedSize.setText(self.conf.get(section, 'storage size', fallback=''))
+            #    page.optEject.setChecked(self.conf.get(section, 'storage option', fallback='') == 'Eject')
+                
+            if section == 'OTP' or section == 'SD':    
                 continue
             else:
                 page.eraseStart.setText(self.conf.get(section, 'erase start', fallback=''))
@@ -649,6 +654,7 @@ class Ui(QtWidgets.QMainWindow, Ui_MainWindow):
         # Execute
         self.threadpool.start(worker)
 
+    '''
     @QtCore.pyqtSlot(str, int)
     def doMsc(self, reserveStr, option):
 
@@ -678,7 +684,8 @@ class Ui(QtWidgets.QMainWindow, Ui_MainWindow):
 
         # Execute
         self.threadpool.start(worker)
-
+    '''
+        
 class Worker(QRunnable):
 
     def __init__(self, fn, *args, **kwargs):
