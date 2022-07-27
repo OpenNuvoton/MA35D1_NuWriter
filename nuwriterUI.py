@@ -477,12 +477,12 @@ class Ui(QtWidgets.QMainWindow, Ui_MainWindow):
                 option |= 0x3fff00
         else:            
             try:
-                start = int(startStr, 0) & 0xffffffff
+                start = int(startStr, 16) & 0xffffffff
             except:
                 start = 0
 
             try:
-                length = int(lengthStr, 0) & 0xffffffff
+                length = int(lengthStr, 16) & 0xffffffff
             except:
                 length = 0x1    
 
@@ -540,9 +540,9 @@ class Ui(QtWidgets.QMainWindow, Ui_MainWindow):
             return 
 
         try:
-            start = int(startStr, 0) & 0xffffffff
+            start = int(startStr, 16) & 0xffffffff
         except:
-            start = 0
+            start = 0 
 
         self.text_browser.clear()
 
@@ -610,12 +610,12 @@ class Ui(QtWidgets.QMainWindow, Ui_MainWindow):
             length = 0
         else:
             try:
-                start = int(startStr, 0) & 0xffffffff
+                start = int(startStr, 16) & 0xffffffff
             except:
                 start = 0
 
             try:
-                length = int(lengthStr, 0) & 0xffffffff
+                length = int(lengthStr, 16) & 0xffffffff
             except:
                 length = 0x1
 

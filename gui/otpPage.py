@@ -12,7 +12,7 @@ from PyQt5.QtCore import QDateTime, QPointF, QRegExp, Qt, QTimer
 from PyQt5.QtGui import QColor, QIntValidator, QRegExpValidator, QValidator
 from PyQt5.QtWidgets import (QApplication, QButtonGroup, QCheckBox, QComboBox, QDateTimeEdit,
         QDial, QDialog, QFileDialog, QFormLayout, QGridLayout, QGroupBox, QHBoxLayout, QLabel, 
-        QLineEdit, QPlainTextEdit, QProgressBar, QPushButton, QRadioButton, QScrollBar, 
+        QLineEdit, QMessageBox, QPlainTextEdit, QProgressBar, QPushButton, QRadioButton, QScrollBar, 
         QSizePolicy, QSlider, QSpinBox, QStyleFactory, QTableWidget, QTabWidget, QTextEdit,
         QVBoxLayout, QWidget)
 
@@ -29,7 +29,7 @@ class KeySizeMeta(QWidget):
         self.genButton = QPushButton('Generate')
 
         _HLayout1 = QHBoxLayout()
-        _HLayout1.addWidget(QLabel(f"{title} Key"))
+        _HLayout1.addWidget(QLabel(f"{title} Key:   0x"))
         _HLayout1.addWidget(self.keyEdit)
         _HLayout1.addWidget(self.genButton)
 
@@ -73,7 +73,7 @@ class KeySizeMeta32(QWidget):
         self.genButton = QPushButton('Generate')
 
         _HLayout1 = QHBoxLayout()
-        _HLayout1.addWidget(QLabel(f"{title} Key"))
+        _HLayout1.addWidget(QLabel(f"{title} Key:   0x"))
         _HLayout1.addWidget(self.keyEdit)
         _HLayout1.addWidget(self.genButton)   
 
@@ -190,9 +190,14 @@ class PovPage(QWidget):
         LayoutBit14.addWidget(self._bit14_11, 1, 1)
         self._GroupBit14.setLayout(LayoutBit14)
         
-        self._bitsec = QCheckBox("Secure boot Disable Bit")
-        LayoutSec = QGridLayout()
-        LayoutSec.addWidget(self._bitsec, 0, 0)
+        self._bits_0 = QRadioButton("Secure boot Enabled")
+        self._bits_1 = QRadioButton("Secure boot Disabled")
+
+        _GroupBits = QGroupBox("Secure boot Selection")
+        LayoutBits = QHBoxLayout()
+        LayoutBits.addWidget(self._bits_0)
+        LayoutBits.addWidget(self._bits_1)
+        _GroupBits.setLayout(LayoutBits)        
 
         _GroupValue = QGroupBox("Power-on Value")
         LayoutValue = QHBoxLayout()
@@ -208,8 +213,12 @@ class PovPage(QWidget):
         _GroupValue.setLayout(LayoutValue)
 
         # signal
-        self._bit0_0.clicked.connect(lambda: self.updateBits(0, 0))
-        self._bit0_1.clicked.connect(lambda: self.updateBits(0, 1))
+        self._bit0_0.clicked.connect(lambda: ( 
+            self.updateBits(0, 0),
+            self.enable_pos(False)))
+        self._bit0_1.clicked.connect(lambda: (
+            self.updateBits(0, 1),
+            self.enable_pos(True)))                
         self._bit1_0.clicked.connect(lambda: self.updateBits(1, 0))
         self._bit1_1.clicked.connect(lambda: self.updateBits(1, 1))
         self._bit2.stateChanged.connect(lambda state: self.checkBit(state, 2))
@@ -251,12 +260,32 @@ class PovPage(QWidget):
         mainLayout.addWidget(_GroupBit10)
         mainLayout.addWidget(_GroupBit12)
         mainLayout.addWidget(self._GroupBit14)
-        mainLayout.addLayout(LayoutSec)
+        mainLayout.addWidget(_GroupBits)
         mainLayout.addStretch()
         mainLayout.addWidget(_GroupValue)
 
         self.setLayout(mainLayout)
 
+    def enable_pos(self, state):
+        
+        self._bit10_00.setEnabled(state)
+        self._bit10_01.setEnabled(state)
+        self._bit10_10.setEnabled(state)
+        self._bit10_11.setEnabled(state)
+        
+        self._bit12_00.setEnabled(state)
+        self._bit12_01.setEnabled(state)
+        self._bit12_10.setEnabled(state)
+        self._bit12_11.setEnabled(state)
+        
+        self._bit14_00.setEnabled(state)
+        self._bit14_01.setEnabled(state)
+        self._bit14_10.setEnabled(state)
+        self._bit14_11.setEnabled(state)
+        
+        self._bits_0.setEnabled(state)
+        self._bits_1.setEnabled(state)
+       
     def checkBit(self, state, lsb):
 
         if state:
@@ -607,14 +636,14 @@ class KeyPage(QWidget):
         self.publicxEdit_sub = QHBoxLayout()
         self.publicyEdit_sub = QHBoxLayout()
         self.aeskeyEdit_sub = QHBoxLayout()
-        self.privateEdit_sub.addWidget(QLabel(f"Private Key"))
+        self.privateEdit_sub.addWidget(QLabel(f"Private Key:    0x"))
         self.privateEdit_sub.addWidget(self.privateEdit)
         self.privateEdit_sub.addWidget(self.privateEdit_btn)
-        self.publicxEdit_sub.addWidget(QLabel(f"Public X KEY6"))
+        self.publicxEdit_sub.addWidget(QLabel(f"Public X KEY6:  0x"))
         self.publicxEdit_sub.addWidget(self.publicxEdit)
-        self.publicyEdit_sub.addWidget(QLabel(f"Public Y KEY7"))
+        self.publicyEdit_sub.addWidget(QLabel(f"Public Y KEY7:  0x"))
         self.publicyEdit_sub.addWidget(self.publicyEdit)
-        self.aeskeyEdit_sub.addWidget(QLabel(f"AES KEY8"))
+        self.aeskeyEdit_sub.addWidget(QLabel(f"AES KEY8:    0x"))
         self.aeskeyEdit_sub.addWidget(self.aeskeyEdit)
         self.aeskeyEdit_sub.addWidget(self.aeskeyEdit_btn)
         
@@ -681,6 +710,7 @@ class OtpPage(QWidget):
         self.tabMedia = QTabWidget()
 
         self.pov = val
+        self.secure_dis = False
 
         self.povPage = PovPage(val, self)
         #self.dpm_plmPage = DpmPlmPage(0, 0, self)
@@ -781,7 +811,9 @@ class OtpPage(QWidget):
             self.povPage.updateBits(14, 0, 2)
             
         if block_1 & 0x5A000000:
-            self.povPage._bitsec.setChecked(True)
+            self.povPage._bits_1.setChecked(True)
+        else:
+            self.povPage._bits_0.setChecked(True)
         
         style_sheet = "color: black; background-color: white"
         
@@ -833,8 +865,10 @@ class OtpPage(QWidget):
         self.povPage._bit14_10.setStyleSheet(style_sheet)
         self.povPage._bit14_11.setStyleSheet(style_sheet)
         
-        self.povPage._bitsec.setEnabled(False)
-        self.povPage._bitsec.setStyleSheet(style_sheet)
+        self.povPage._bits_0.setEnabled(False)
+        self.povPage._bits_1.setEnabled(False)
+        self.povPage._bits_0.setStyleSheet(style_sheet) 
+        self.povPage._bits_1.setStyleSheet(style_sheet)
         
         #dpm_plm hide right now 
         #block_2_d = int.from_bytes(d[4:8], byteorder='little')
@@ -1032,7 +1066,7 @@ class OtpPage(QWidget):
                     self.povPage.updateBits(12, 3, 2)
                 
                 if d['boot_cfg'].get('secboot') == "disable":
-                    self.povPage._bitsec.setChecked(True)
+                    self.povPage._bits_1.setChecked(True)
            
             #dpm_plm fill (hide right now) 
                 '''    
@@ -1146,6 +1180,7 @@ class OtpPage(QWidget):
 
     def _exportPov(self):
         # print(f"export POV {self.exportPov.isChecked()}")
+        self.secure_dis = False
         if self.exportPov.isChecked():
             # print(f"POV = {self.povPage.powerOnVal}")
 
@@ -1237,9 +1272,10 @@ class OtpPage(QWidget):
                 
                 boot_cfg["option"] = _option[bootsrc]
 
-            sec = self.povPage._bitsec.isChecked()
+            sec = self.povPage._bits_1.isChecked()
             if sec:
                 boot_cfg["secboot"] = "disable"
+                self.secure_dis = True
             
             self.otp_dict["boot_cfg"] = boot_cfg
     
@@ -1416,9 +1452,13 @@ class OtpPage(QWidget):
             self.exportFileEdit.setText(fileName)
 
             self._exportJson()
-
+            
+            if self.secure_dis == False:
+                reply = QMessageBox.warning(self,'Warning','WARNING: Secure boot is enabled, please make sure all secure boot settings are correct, OTP can only be programmed once',QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
+                if reply != QMessageBox.Yes:
+                    return
             with open(fileName, "w") as write_file:
-                json.dump(self.otp_dict, write_file, indent=4)
+                 json.dump(self.otp_dict, write_file, indent=4)
 
 if __name__ == '__main__':
 

@@ -132,7 +132,7 @@ class MediaPage(QWidget):
             writeLayout.addRow(QLabel("Image type"), imgTypeLayout)
 
         self.imgAddress = QLineEdit('')
-        writeLayout.addRow(QLabel("Image addr."), self.imgAddress)    
+        writeLayout.addRow(QLabel("Image addr.  0x"), self.imgAddress)    
 
         if self._media == DEV_NAND:
             self.normalWrite = QRadioButton('None')
@@ -207,13 +207,13 @@ class MediaPage(QWidget):
         self.readAll.stateChanged.connect(lambda checked: (self.readStart.setEnabled(not checked), self.readEnd.setEnabled(not checked)))
 
         _rangeLayout.addWidget(self.readStart)
-        _rangeLayout.addWidget(QLabel("-"))
+        _rangeLayout.addWidget(QLabel("-    0x"))
             
         _rangeLayout.addWidget(self.readEnd)
         _rangeLayout.addWidget(self.readAll)
 
         layout.addRow(QLabel("Save file"), _fileLayout)
-        layout.addRow(QLabel("Range"), _rangeLayout)
+        layout.addRow(QLabel("Range:    0x"), _rangeLayout)
 
         if self._media in [DEV_NAND, DEV_SPINAND]:
             self.readWithBad = QCheckBox('With Bad')
@@ -276,11 +276,11 @@ class MediaPage(QWidget):
         self.eraseAll.stateChanged.connect(lambda checked: (self.eraseStart.setEnabled(not checked), self.eraseEnd.setEnabled(not checked)))
 
         _rangeLayout.addWidget(self.eraseStart)
-        _rangeLayout.addWidget(QLabel("-"))
+        _rangeLayout.addWidget(QLabel("-    0x"))
         _rangeLayout.addWidget(self.eraseEnd)
         _rangeLayout.addWidget(self.eraseAll)
 
-        layout.addRow(QLabel("Range    "), _rangeLayout)
+        layout.addRow(QLabel("Range:    0x"), _rangeLayout)
 
         group.setLayout(layout)
         self.mainLayout.addWidget(group)
