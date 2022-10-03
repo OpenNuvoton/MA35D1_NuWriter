@@ -12,7 +12,7 @@ from PyQt5.QtCore import pyqtSignal, QObject, QRunnable, QThreadPool
 from nuwriter import (DEV_DDR_SRAM, DEV_NAND, DEV_OTP, DEV_SD_EMMC,
         DEV_SPINAND, DEV_SPINOR, DEV_USBH,
         OPT_NONE, OPT_SCRUB, OPT_WITHBAD, OPT_EXECUTE, OPT_VERIFY,
-        OPT_UNPACK, OPT_RAW, OPT_EJECT, OPT_SETINFO, OPT_CONCAT, 
+        OPT_UNPACK, OPT_RAW, OPT_EJECT, OPT_SETINFO, OPT_CONCAT, OPT_NOCRC,
         OPT_OTPBLK1, OPT_OTPBLK2, OPT_OTPBLK3, OPT_OTPBLK4, OPT_OTPBLK5, OPT_OTPBLK6, OPT_OTPBLK7,
         do_attach, do_convert, do_pack, do_stuff, do_unpack, do_img_erase, do_img_program, do_img_read, 
         do_otp_program, do_otp_erase, do_otp_read,
@@ -75,7 +75,8 @@ class Ui(QtWidgets.QMainWindow, Ui_MainWindow):
         self.browseCCFG_btn.clicked.connect(self.iniBrowseCCFG)
         self.convert_btn.clicked.connect(self.doConvert)   
 
-        self.pushButton_c.clicked.connect(self.CCFG_generate)        
+        self.pushButton_c.clicked.connect(self.CCFG_generate)
+        self.pushButton_c2.clicked.connect(self.CCFG_show)        
         
         # Pack 
         self.browsePCFG_btn.clicked.connect(self.iniBrowsePCFG)
@@ -123,7 +124,7 @@ class Ui(QtWidgets.QMainWindow, Ui_MainWindow):
         self.tabMedia.setTabVisible(5,self.otp_mode)
 
     def showLicense(self):
-        reply = QtWidgets.QMessageBox.about(self,'License',' NuWriterGUI Version: 1.00 \n\n NuWriterGUI is based on pyQt5 ')
+        reply = QtWidgets.QMessageBox.about(self,'License',' NuWriterGUI Version: 1.01 \n\n NuWriterGUI is based on pyQt5 ')
     
     def showManual(self):
         manual_path = "UM_EN_MA35D1_NuWriter.pdf"
@@ -145,14 +146,22 @@ class Ui(QtWidgets.QMainWindow, Ui_MainWindow):
         else:
             self.pushButton_p.setEnabled(True)
       
-    def attachshow(self):        
+    def attachshow(self):
+        self.text_browser.clear()
         self.attachwindow = SetInfoPage(parent = self) 
         self.attachwindow.set_info_name(self.InfoFileLineEdit.text())        
         self.attachwindow.show() 
 
     def CCFG_generate(self):
         self.CCFG_generate_window = CCFG_MainPage()        
-        self.CCFG_generate_window.show()   
+        self.CCFG_generate_window.show()
+
+    def CCFG_show(self):
+        self.text_browser.clear()
+        self.CCFG_generate_window = CCFG_MainPage()
+        self.CCFG_generate_window.hideExport()
+        self.CCFG_generate_window.showExport(self.ccfgFileLineEdit.text())
+        self.CCFG_generate_window.show()
 
     def PCFG_generate(self):
         self.PCFG_generate_window = PCFG_MainPage(int(self.pcfgImgNumEdit.text()))        
@@ -160,12 +169,14 @@ class Ui(QtWidgets.QMainWindow, Ui_MainWindow):
         
     @QtCore.pyqtSlot()   
     def OTP_generate(self):
+        self.text_browser.clear()
         self.OTP_generate_window = OtpPage()  
         self.OTP_generate_window.set_otp_name(self.otpPage.imgPathLine.text())                
         self.OTP_generate_window.show() 
         
     @QtCore.pyqtSlot()   
     def OTP_readback(self):
+        self.text_browser.clear()
         self.OTP_generate_window = OtpPage() 
         self.OTP_generate_window.read_back_otp(self.otpPage.fileShow.text())
         self.OTP_generate_window.show()
@@ -294,6 +305,8 @@ class Ui(QtWidgets.QMainWindow, Ui_MainWindow):
                     page.rawWrite.setChecked(True)
                 elif option == "Execute":
                     page.optExecute.setChecked(True)
+                elif option == "NoCRC":
+                    page.crcDisabled.setChecked(True)
                 elif option != '' and option != 'None':
                     print(f'unknown optioin {option}')
             except:
@@ -446,6 +459,7 @@ class Ui(QtWidgets.QMainWindow, Ui_MainWindow):
     @QtCore.pyqtSlot()
     def doUnpack(self):
         cfg_file = self.upcfgFileLineEdit.text()
+        option = int(self.checkBox_up1.isChecked())
         if cfg_file == "":
             print(f'Config File missing!')
             return
@@ -456,7 +470,7 @@ class Ui(QtWidgets.QMainWindow, Ui_MainWindow):
         self.text_browser.clear()
         
         #print(f'do_unpack({cfg_file})')
-        worker = Worker(do_unpack, cfg_file)
+        worker = Worker(do_unpack, cfg_file, option)
 
         # Execute
         self.threadpool.start(worker)
@@ -475,19 +489,22 @@ class Ui(QtWidgets.QMainWindow, Ui_MainWindow):
             if media == DEV_OTP:
                 length = 352
                 option |= 0x3fff00
-        else:            
+        else: 
             try:
                 start = int(startStr, 16) & 0xffffffff
             except:
-                start = 0
+                print(f'Range Setting missing!')
+                return
 
             try:
                 length = int(lengthStr, 16) & 0xffffffff
             except:
-                length = 0x1    
+                print(f'Range Setting missing!')
+                return                
 
 
         self.text_browser.clear()
+            
 
         if media in [DEV_DDR_SRAM, DEV_NAND, DEV_SPINOR, DEV_SPINAND, DEV_OTP, DEV_SD_EMMC]:
 
@@ -584,6 +601,8 @@ class Ui(QtWidgets.QMainWindow, Ui_MainWindow):
             self.conf.set(section, 'write option', "Verify")
         elif option == OPT_RAW:
             self.conf.set(section, 'write option', "Raw")
+        elif option == OPT_NOCRC:
+            self.conf.set(section, 'write option', "NoCRC")
 
         self.conf.write(open(self.iniFilePath, 'w', encoding='utf-8'))
 
@@ -604,21 +623,22 @@ class Ui(QtWidgets.QMainWindow, Ui_MainWindow):
     # def do_img_erase(media, start, length=0, option=OPT_NONE) -> None:
     @QtCore.pyqtSlot(int, str, str, int, bool)
     def doImgErase(self, media, startStr, lengthStr, option, isall=False):
-
+        
         if isall:
             start = 0
             length = 0
-        else:
+        else: 
             try:
                 start = int(startStr, 16) & 0xffffffff
             except:
-                start = 0
+                print(f'Range Setting missing!')
+                return
 
             try:
                 length = int(lengthStr, 16) & 0xffffffff
             except:
-                length = 0x1
-
+                print(f'Range Setting missing!')
+                return
 
         self.text_browser.clear()
 

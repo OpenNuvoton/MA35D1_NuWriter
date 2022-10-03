@@ -31,6 +31,8 @@ OPT_UNPACK = 4      # For pack
 OPT_RAW = 5         # For write
 OPT_EJECT = 6       # For msc
 
+OPT_NOCRC = 11      # For write
+
 
 class MediaPage(QWidget):
 
@@ -94,8 +96,10 @@ class MediaPage(QWidget):
 
         if self.radioPack.isChecked():
             self.imgAddress.setEnabled(False)
+            self.crcDisabled.setEnabled(True)
         else:
             self.imgAddress.setEnabled(True)
+            self.crcDisabled.setEnabled(False)
 
     def addWriteArgument(self):
 
@@ -116,18 +120,20 @@ class MediaPage(QWidget):
         if self._media != DEV_DDR_SRAM and self._media != DEV_OTP:
             self.radioData = QRadioButton("Data")
             self.radioPack = QRadioButton("Pack")
+            self.crcDisabled = QCheckBox("CRC Disabled")
 
             self.btngroup1 = QButtonGroup()
             self.btngroup1.addButton(self.radioData)
             self.btngroup1.addButton(self.radioPack)
 
-            self.radioPack.toggled.connect(self.onRadioToggled)
+            self.radioData.toggled.connect(self.onRadioToggled)
             self.radioPack.toggled.connect(self.onRadioToggled)
 
             imgTypeLayout = QHBoxLayout()
             imgTypeLayout.addWidget(self.radioData)
             imgTypeLayout.addWidget(self.radioPack)
             imgTypeLayout.addStretch()
+            imgTypeLayout.addWidget(self.crcDisabled)
 
             writeLayout.addRow(QLabel("Image type"), imgTypeLayout)
 
@@ -371,13 +377,14 @@ class MediaPage(QWidget):
         _file = self.imgPathLine.text()
         _address = self.imgAddress.text()
         _media = self._media
-
+        _option = OPT_NONE
+        
         try:
             _ispack = self.radioPack.isChecked()
+            if _ispack and self.crcDisabled.isChecked():
+                _option = OPT_NOCRC
         except:
             _ispack = False
-
-        _option = OPT_NONE
 
         if _media == DEV_DDR_SRAM:
             if self.optExecute.isChecked():
