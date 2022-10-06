@@ -242,17 +242,29 @@ def conv_otp(opt_file_name) -> (bytearray, int):
             data[12:18] = bytes.fromhex(d['mac0'])
             option |= OPT_OTPBLK3
         elif key == 'mac1':
+            if len(bytes.fromhex(d['mac1'])) != 6:
+                print("mac1 is 6 bytes, please check the size")
+                sys.exit(2)
             data[20:26] = bytes.fromhex(d['mac1'])
             option |= OPT_OTPBLK4
         elif key == 'dplypwd':
+            if len(bytes.fromhex(d['dplypwd'])) != 4:
+                print("dplypwd is 4 bytes, please check the size")
+                sys.exit(2)
             data[28:32] = bytes.fromhex(d['dplypwd'])
             option |= OPT_OTPBLK5
         elif key == 'sec':
+            if len(bytes.fromhex(d['sec'])) > 88:
+                print("sec at most 88 bytes, please check the size")
+                sys.exit(2)
             newkey = bytes.fromhex(d['sec'])
             newkey += b'\x00' * (88 - len(newkey))
             data[32:120] = newkey
             option |= OPT_OTPBLK6
         elif key == 'nonsec':
+            if len(bytes.fromhex(d['nonsec'])) > 88:
+                print("nonsec at most 88 bytes, please check the size")
+                sys.exit(2)
             newkey = bytes.fromhex(d['nonsec'])
             newkey += b'\x00' * (88 - len(newkey))
             data[120:208] = newkey

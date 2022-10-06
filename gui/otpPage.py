@@ -457,34 +457,68 @@ class MiscPage(QWidget):
 
     def addDplyPwd(self):
 
-        _Group = QGroupBox("Deployed Password")
+        _Group = QGroupBox("Deployed Password:  0x")
         _Layout = QHBoxLayout()
         _Group.setLayout(_Layout)
 
         self.dplypwdEdit = QLineEdit()
         _Layout.addWidget(self.dplypwdEdit)
         self.mainLayout.addWidget(_Group)
+        
+        self.dplypwdEdit.textChanged.connect(self.dplypwdEdit_changed)
+        
+    def dplypwdEdit_changed(self):
+        reg_key8 = QRegExpValidator(QRegExp("[0-9A-Fa-f]{8}"))
+        
+        if reg_key8.validate(self.dplypwdEdit.text(),0)[0] == QValidator.Acceptable:
+            self.dplypwdEdit.setStyleSheet("border: 2px solid limegreen")
+        elif self.dplypwdEdit.text() == "":
+            self.dplypwdEdit.setStyleSheet("border: 1px solid black")
+        else:
+            self.dplypwdEdit.setStyleSheet("border: 2px solid red")
 
 
     def addSecure(self):
 
-        _Group = QGroupBox("Secure Region")
+        _Group = QGroupBox("Secure Region(hex):  0x")
         _Layout = QHBoxLayout()
         _Group.setLayout(_Layout)
 
         self.secureText = QPlainTextEdit()
         _Layout.addWidget(self.secureText)
         self.mainLayout.addWidget(_Group)
+        self.secureText.textChanged.connect(self.secureText_changed)
 
     def addNonSecure(self):
 
-        _Group = QGroupBox("Non-secure Region")
+        _Group = QGroupBox("Non-secure Region(hex):  0x")
         _Layout = QHBoxLayout()
         _Group.setLayout(_Layout)
 
         self.nonSecureText = QPlainTextEdit()
         _Layout.addWidget(self.nonSecureText)
         self.mainLayout.addWidget(_Group)
+        self.nonSecureText.textChanged.connect(self.nonSecureText_changed)
+        
+    def secureText_changed(self):
+        reg_key176 = QRegExpValidator(QRegExp("[0-9A-Fa-f]{1,176}"))
+        
+        if reg_key176.validate(self.secureText.toPlainText(),0)[0] == QValidator.Acceptable:
+            self.secureText.setStyleSheet("border: 2px solid limegreen")
+        elif self.secureText.toPlainText() == "":
+            self.secureText.setStyleSheet("border: 1px solid black")
+        else:
+            self.secureText.setStyleSheet("border: 2px solid red")
+    
+    def nonSecureText_changed(self):
+        reg_key176 = QRegExpValidator(QRegExp("[0-9A-Fa-f]{1,176}"))
+        
+        if reg_key176.validate(self.nonSecureText.toPlainText(),0)[0] == QValidator.Acceptable:
+            self.nonSecureText.setStyleSheet("border: 2px solid limegreen")
+        elif self.nonSecureText.toPlainText()== "":
+            self.nonSecureText.setStyleSheet("border: 1px solid black")
+        else:
+            self.nonSecureText.setStyleSheet("border: 2px solid red")
 
 
 class KeyPage(QWidget):
