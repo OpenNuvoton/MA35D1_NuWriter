@@ -16,7 +16,7 @@ from nuwriter import (DEV_DDR_SRAM, DEV_NAND, DEV_OTP, DEV_SD_EMMC,
         OPT_OTPBLK1, OPT_OTPBLK2, OPT_OTPBLK3, OPT_OTPBLK4, OPT_OTPBLK5, OPT_OTPBLK6, OPT_OTPBLK7,
         do_attach, do_convert, do_pack, do_stuff, do_unpack, do_img_erase, do_img_program, do_img_read, 
         do_otp_program, do_otp_erase, do_otp_read,
-        do_pack_program, do_msc)        
+        do_pack_program, do_msc, switch_mp_mode)        
 
 from mainwindow import Ui_MainWindow
 from gui.mediaPages import MediaPage
@@ -106,6 +106,7 @@ class Ui(QtWidgets.QMainWindow, Ui_MainWindow):
         # ToolBar setting         
         self.actionDev.triggered.connect(self.dev_mode_check)
         self.actionOTP.triggered.connect(self.otp_mode_check)
+        self.actionMP.triggered.connect(self.mp_mode_check)
         
         self.actionLicense.triggered.connect(self.showLicense)
         self.actionAbout.triggered.connect(self.showManual)
@@ -120,8 +121,10 @@ class Ui(QtWidgets.QMainWindow, Ui_MainWindow):
         
     def otp_mode_check(self):
         self.otp_mode = not self.otp_mode
-        
         self.tabMedia.setTabVisible(5,self.otp_mode)
+        
+    def mp_mode_check(self):
+        switch_mp_mode(True)
 
     def showLicense(self):
         reply = QtWidgets.QMessageBox.about(self,'License',' NuWriterGUI Version: 1.01 \n\n NuWriterGUI is based on pyQt5 ')
@@ -347,6 +350,14 @@ class Ui(QtWidgets.QMainWindow, Ui_MainWindow):
     #     pass
 
     def normalOutputWritten(self, text):
+        while "[A" in text:
+            text = text.replace('[A', '')
+            text = text.replace('\r', '')
+            text = text.replace('\n', '')
+        if text == "\n" or text == "\r\n":
+            text = ""
+        if text.startswith("Successfully") or text.startswith("Failed"):
+            text = "\n" + text
         self.text_browser.insertPlainText(text)
         self.text_browser.moveCursor(QtGui.QTextCursor.End)
 

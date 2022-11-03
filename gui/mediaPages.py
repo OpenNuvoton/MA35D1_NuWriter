@@ -152,7 +152,7 @@ class MediaPage(QWidget):
             #writeLayout.addRow(QLabel("Option"), _optLayout)
         elif self._media == DEV_DDR_SRAM:
             self.optExecute = QCheckBox('Execute after download')
-            #writeLayout.addRow(QLabel("Option"), self.optExecute)
+            writeLayout.addRow(QLabel("Option"), self.optExecute)
         else:
             self.verifyWrite = QCheckBox('Verify')
             #writeLayout.addRow(QLabel("Option"), self.verifyWrite)

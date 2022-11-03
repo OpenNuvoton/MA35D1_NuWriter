@@ -70,6 +70,24 @@ class NandInfo(QWidget):
         layout.addRow(QLabel("Block Count:"), self.Nand_blkcnt)
         layout.addRow(QLabel("PagePerBlock:"), self.Nand_pageperblk)
         self.setLayout(layout)
+        
+class LedInfo(QWidget):
+
+    def __init__(self, title="", parent=None):
+    
+        super(LedInfo, self).__init__(parent)
+        
+        layout = QFormLayout()
+        self.Led_port = QLineEdit('')
+        self.Led_bit = QLineEdit('')
+        self.Led_on = QLineEdit('')
+        self.Led_off = QLineEdit('')
+        
+        layout.addRow(QLabel("LED Port:"), self.Led_port)
+        layout.addRow(QLabel("LED bit:"), self.Led_bit)
+        layout.addRow(QLabel("LED on:"), self.Led_on)
+        layout.addRow(QLabel("LED off:"), self.Led_off)
+        self.setLayout(layout)
 
 
 class SetInfoPage(QWidget):
@@ -88,10 +106,12 @@ class SetInfoPage(QWidget):
         self.spiNor = SpiNorInfo()
         self.spiNand = SpiNandInfo()
         self.nand = NandInfo()
+        self.led = LedInfo()
         
         self.tabMedia.addTab(self.spiNor, 'SPI NOR')
         self.tabMedia.addTab(self.spiNand, 'SPI NAND')
         self.tabMedia.addTab(self.nand, 'NAND')
+        self.tabMedia.addTab(self.led, 'LED')
 
         self.gen_Button = QPushButton('Export')
         self.gen_Button.clicked.connect(self.exportFile)
@@ -155,6 +175,16 @@ class SetInfoPage(QWidget):
                         self.nand.Nand_blkcnt.setText(d['nand']['blkcnt'])
                     elif sub_key == 'pageperblk':
                         self.nand.Nand_pageperblk.setText(d['nand']['pageperblk'])
+            elif key == 'led':
+                for sub_key in d['led'].keys():
+                    if sub_key == 'port':
+                        self.led.Led_port.setText(d['led']['port'])
+                    elif sub_key == 'bit':
+                        self.led.Led_bit.setText(d['led']['bit'])
+                    elif sub_key == 'on':
+                        self.led.Led_on.setText(d['led']['on'])
+                    elif sub_key == 'off':
+                        self.led.Led_off.setText(d['led']['off'])
     
     def exportJson(self):
     
@@ -185,9 +215,17 @@ class SetInfoPage(QWidget):
         nand["blkcnt"] = self.nand.Nand_blkcnt.text()
         nand["pageperblk"] = self.nand.Nand_pageperblk.text()
         
+        led = {}
+        
+        led["port"] = self.led.Led_port.text()
+        led["bit"] = self.led.Led_bit.text()
+        led["on"] = self.led.Led_on.text()
+        led["off"] = self.led.Led_off.text()
+        
         self.info_dict["spinor"] = spinor
         self.info_dict["spinand"] = spinand
         self.info_dict["nand"] = nand
+        self.info_dict["led"] = led
     
     def exportFile(self):
     
