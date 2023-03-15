@@ -345,11 +345,11 @@ class DpmPlmPage(QWidget):
 
         self.dpmVal = dpmVal
         self.plmVal = plmVal
-        self.editDpm = QLineEdit(hex(self.dpmVal))
+        #self.editDpm = QLineEdit(hex(self.dpmVal))
         self.editPlm = QLineEdit(hex(self.plmVal))
         self.dpm_btn = []
         self.plm_btn = []
-
+        '''
         descriptions = [
             "DPM A35 Secure Debug State DISABLE OTP Bit",
             "DPM A35 Secure Debug State LOCK OTP Bit",
@@ -370,7 +370,7 @@ class DpmPlmPage(QWidget):
             "DPM GIC CFGSDISABLE Debug State DISABLE OTP Bit",
             "DPM GIC CFGSDISABLE Debug State LOCK OTP Bit"
         ]
-
+        
         _dpmGroup = QGroupBox("DPM Setting")
         _dpmLayout = QVBoxLayout()
         _dpmGroup.setLayout(_dpmLayout)
@@ -379,7 +379,7 @@ class DpmPlmPage(QWidget):
             self.dpm_btn.append(QCheckBox(desc))
             self.dpm_btn[i].stateChanged.connect(lambda state, i=i: self.checkDpmBit(state, i))
             _dpmLayout.addWidget(self.dpm_btn[i])
-
+        '''
         _plmGroup = QGroupBox("PLM Setting")
         _plmLayout = QHBoxLayout()
         _plmGroup.setLayout(_plmLayout)
@@ -390,20 +390,20 @@ class DpmPlmPage(QWidget):
             _plmLayout.addWidget(self.plm_btn[i])
 
         mainLayout = QVBoxLayout()
-        mainLayout.addWidget(_dpmGroup)
+        #mainLayout.addWidget(_dpmGroup)
         mainLayout.addWidget(_plmGroup)
         mainLayout.addStretch()
 
         _valLayout = QHBoxLayout()
 
-        _valLayout.addWidget(QLabel("DPM Value"))
-        _valLayout.addWidget(self.editDpm)
+        #_valLayout.addWidget(QLabel("DPM Value"))
+        #_valLayout.addWidget(self.editDpm)
         _valLayout.addWidget(QLabel("PLM Value"))
         _valLayout.addWidget(self.editPlm)
         mainLayout.addLayout(_valLayout)
 
         self.setLayout(mainLayout)
-
+    '''
     def checkDpmBit(self, state, lsb):
 
         if state:
@@ -416,6 +416,7 @@ class DpmPlmPage(QWidget):
         self.dpmVal &= ~(_mask << lsb)
         self.dpmVal |= ((val &_mask) << lsb)
         self.editDpm.setText(hex(self.dpmVal))
+    '''
 
     def setPlmStage(self, i):
 
@@ -747,12 +748,12 @@ class OtpPage(QWidget):
         self.secure_dis = False
 
         self.povPage = PovPage(val, self)
-        #self.dpm_plmPage = DpmPlmPage(0, 0, self)
+        self.dpm_plmPage = DpmPlmPage(0, 0, self)
         self.miscPage = MiscPage(self)
         self.keyPage = KeyPage(self)
 
         self.tabMedia.addTab(self.povPage, 'Power-On Setting')
-        #self.tabMedia.addTab(self.dpm_plmPage, 'DPM and PLM Setting')
+        self.tabMedia.addTab(self.dpm_plmPage, 'PLM Setting')
         self.tabMedia.addTab(self.miscPage, 'MISC Setting')
         self.tabMedia.addTab(self.keyPage, 'KEY Setting')
 
@@ -906,7 +907,14 @@ class OtpPage(QWidget):
         
         #dpm_plm hide right now 
         #block_2_d = int.from_bytes(d[4:8], byteorder='little')
-        #block_2_p = int.from_bytes(d[8:12], byteorder='little')
+        block_2_p = int.from_bytes(d[8:12], byteorder='little')
+        
+        #self.dpm_plmPage.setPlmStage(i)
+        
+        for i in range(0, 4):
+            if block_2_p & (0x1 << i):
+                self.dpm_plmPage.plm_btn[i].setChecked(True)
+                self.dpm_plmPage.setPlmStage(i)
         
         block_3 = d[12:18].hex()
         if int(block_3,16):
@@ -1103,8 +1111,9 @@ class OtpPage(QWidget):
                     self.povPage._bits_1.setChecked(True)
            
             #dpm_plm fill (hide right now) 
-                '''    
+                    
             elif key == 'dpm_plm':
+                '''
                 dpm_order = ["a35sdsdis", "a35sdslock", "a35sndsdis", "a35sndslock", "a35nsdsdis",
                              "a35nsdslock", "a35nsndsdis", "a35nsndslock", "m4dsdis", "m4dslock",
                              "m4ndsdis", "m4ndslock", "extdis", "extlock", "exttdis", "exttlock",
@@ -1113,12 +1122,13 @@ class OtpPage(QWidget):
                     if d['dpm_plm'].get('dpm').get(sub_key) == "1":
                         self.dpm_plmPage.dpm_btn[i].setChecked(True)
                         self.dpm_plmPage.checkDpmBit(self.dpm_plmPage.dpm_btn[i].isChecked(), i)
+                '''
                 plm_order = ["oem", "deploy", "rma", "prma"]
                 for i, sub_key in enumerate(plm_order):
                     if d['dpm_plm'].get('plm') == sub_key:
                             self.dpm_plmPage.plm_btn[i].setChecked(True)
                             self.dpm_plmPage.setPlmStage(i)
-                '''                    
+                                   
             elif key == 'mac0':
                 self.miscPage.mac0LineEdit.setText(d['mac0'])
             elif key == 'mac1':
@@ -1157,16 +1167,18 @@ class OtpPage(QWidget):
         self._Group.setLayout(_Layout)
 
         self.exportPov = QCheckBox("Power-On")
-        #self.exportDpmPlm = QCheckBox("DPM and PLM")
+        self.exportDpmPlm = QCheckBox("PLM")
         self.exportMAC0 = QCheckBox("MAC0 address")
         self.exportMAC1 = QCheckBox("MAC1 address")
         self.exportDplypwd = QCheckBox("Deployed Password")
         self.exportSecure = QCheckBox("Secure Region")
         self.exportNonSecure = QCheckBox("Non-secure Region")
         self.exportKey = QCheckBox("Hardware Unique Key, Key Storage and IBR Key")
+        self.void = QCheckBox("Void")
+        self.void.setVisible(False)
 
         self.checkList = [
-            self.exportPov, self.exportKey,
+            self.exportPov,  self.exportDpmPlm, self.exportKey,
             self.exportMAC0, self.exportMAC1,
             self.exportDplypwd, self.exportSecure, self.exportNonSecure
         ]
@@ -1182,7 +1194,7 @@ class OtpPage(QWidget):
 
         _H1Layout = QHBoxLayout()
         _H1Layout.addWidget(self.exportPov)
-        #_H1Layout.addWidget(self.exportDpmPlm)
+        _H1Layout.addWidget(self.exportDpmPlm)
         _H1Layout.addWidget(self.exportMAC0)
         _H1Layout.addWidget(self.exportMAC1)
 
@@ -1190,7 +1202,7 @@ class OtpPage(QWidget):
         _H2Layout.addWidget(self.exportDplypwd)
         _H2Layout.addWidget(self.exportSecure)
         _H2Layout.addWidget(self.exportNonSecure)
-        #_H2Layout.addStretch()
+        _H2Layout.addWidget(self.void)
 
         _H3Layout = QHBoxLayout()
         _H3Layout.addWidget(self.exportButton)
@@ -1313,18 +1325,18 @@ class OtpPage(QWidget):
             
             self.otp_dict["boot_cfg"] = boot_cfg
     
-    # DPM/PLM Hide Right Now
-        '''
+    # DPM Hide Right Now
+        
     def _exportDpmPlm(self):
 
         if self.exportDpmPlm.isChecked():
 
-            _dpmVal = self.dpm_plmPage.dpmVal
+            #_dpmVal = self.dpm_plmPage.dpmVal
             _plmVal = self.dpm_plmPage.plmVal
 
 
             dpm_plm = {}
-
+            '''
             if _dpmVal:
 
                 dpm = {}
@@ -1384,7 +1396,7 @@ class OtpPage(QWidget):
                     dpm["giccfgslock"] = "1"
 
                 dpm_plm["dpm"] = dpm
-
+            '''
             if _plmVal == 0x1:
                 dpm_plm["plm"] = "oem"
             elif _plmVal == 0x3:
@@ -1395,7 +1407,7 @@ class OtpPage(QWidget):
                 dpm_plm["plm"] = "prma"
 
             self.otp_dict["dpm_plm"] = dpm_plm
-        '''
+        
     def _exportMAC01(self):
 
         if self.exportMAC0.isChecked():
@@ -1468,7 +1480,7 @@ class OtpPage(QWidget):
         self.otp_dict = {}
 
         self._exportPov()
-        #self._exportDpmPlm()
+        self._exportDpmPlm()
         self._exportMAC01()
         self._exportDplyPwd()
         self._exportSecureNonSecure()

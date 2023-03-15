@@ -41,6 +41,7 @@ DEV_SPINOR = 3
 DEV_SPINAND = 4
 DEV_OTP = 6
 DEV_USBH = 7
+DEV_USBD = 8
 DEV_UNKNOWN = 0xFF
 
 # For OTP programming
@@ -64,6 +65,9 @@ OPT_SETINFO = 8     # For set storage info for attach
 OPT_CONCAT = 9      # For convert, concatenate at the end of encrypted data file
 OPT_SHOWHDR = 10    # For convert. Instead of convert, show header content instead
 OPT_NOCRC = 11      # For pack. unpack file without crc32 check
+OPT_DDR_INIT = 1    # For ddr
+OPT_DDR_800 = 2     # For ddr, ddr_pll
+OPT_DDR_667 = 3     # For ddr, ddr_pll
 OPT_UNKNOWN = 0xFF  # Error
 
 
@@ -965,7 +969,7 @@ def do_img_read(media, start, out_file_name, length=0x1, option=OPT_NONE) -> Non
     bar.close()
 
 
-def __attach(dev, ini_data, xusb_data) -> int:
+def __attach(dev, ini_data, xusb_data, in_sram) -> int:
     ini_len = len(ini_data)
     out = int(ini_len).to_bytes(4, byteorder="little")
     out += b'\x00\x00\x03\x28'  # Execute address is 0x28030000
@@ -985,7 +989,10 @@ def __attach(dev, ini_data, xusb_data) -> int:
 
     xusb_len = len(xusb_data)
     out = int(xusb_len).to_bytes(4, byteorder="little")
-    out += b'\x00\x00\x00\x87'  # Execute address is 0x87000000
+    if in_sram == 1:
+        out += b'\x00\x00\x00\x28'  # Execute address is 0x28000000
+    else:
+        out += b'\x00\x00\x00\x87'  # Execute address is 0x87000000
     dev.write(out)
     for offset in range(0, xusb_len, TRANSFER_SIZE):
         xfer_size = TRANSFER_SIZE if offset + TRANSFER_SIZE < xusb_len else xusb_len - offset
@@ -1055,6 +1062,190 @@ def __get_info(dev, data) -> int:
     return 0
 
 
+def __do_nuwriter(dev, media, start, img_data, xusb_data, option) -> int:
+
+    img_length = len(img_data)
+    cmd = start.to_bytes(8, byteorder='little')
+    cmd += img_length.to_bytes(8, byteorder='little')
+    cmd += b'\x00' * 4
+    if option == OPT_DDR_800:
+        cmd += option.to_bytes(4, byteorder='little')
+    else:
+        if option == OPT_DDR_667:
+            cmd += option.to_bytes(4, byteorder='little')
+        else:
+            cmd += b'\x00' * 4
+
+    dev.set_media(media)
+    dev.write(cmd)
+    ack = dev.read(4)
+    if int.from_bytes(ack, byteorder="little") != ACK:
+        print("Receive ACK error")
+        return -1
+
+    for offset in range(0, img_length, TRANSFER_SIZE):
+        xfer_size = TRANSFER_SIZE if offset + TRANSFER_SIZE < img_length else img_length - offset
+        dev.write(img_data[offset: offset + xfer_size])
+        ack = dev.read(4)
+        if int.from_bytes(ack, byteorder="little") != xfer_size:
+            print("Ack size error")
+            return -1
+    dev.read(4)
+
+    xusb_length = len(xusb_data)
+    cmd = b'\x00\x00\x00\x87'  # Execute address is 0x87000000
+    cmd += b'\x00' * 4
+    cmd += xusb_length.to_bytes(8, byteorder='little')
+    cmd += b'\x00' * 4
+    cmd += b'\x00' * 4
+
+    dev.set_media(media)
+    dev.write(cmd)
+    ack = dev.read(4)
+    if int.from_bytes(ack, byteorder="little") != ACK:
+        print("Receive ACK error")
+        return -1
+
+    for offset in range(0, xusb_length, TRANSFER_SIZE):
+        xfer_size = TRANSFER_SIZE if offset + TRANSFER_SIZE < xusb_length else xusb_length - offset
+        dev.write(xusb_data[offset: offset + xfer_size])
+        ack = dev.read(4)
+        if int.from_bytes(ack, byteorder="little") != xfer_size:
+            print("Ack size error")
+            return -1
+    dev.read(4)
+
+    return 0
+
+
+def do_nuwriter(media, start, image_file_name, option=OPT_NONE) -> None:
+    global mp_mode
+
+    # devices = XUsbComList(attach_all=mp_mode).get_dev()
+    _XUsbComList = XUsbComList(attach_all=mp_mode)
+    devices = _XUsbComList.get_dev()
+
+    if len(devices) == 0:
+        print("Device not found")
+        sys.exit(2)
+    try:
+        with open(image_file_name, "rb") as image_file:
+            img_data = image_file.read()
+
+    except (IOError, OSError) as err:
+        print(f"Open {image_file_name} failed")
+        sys.exit(err)
+
+    xusb_location = "missing"
+    if os.path.exists("xusb.bin"):  # default use the xusb.bin in current directory
+        xusb_location = "xusb.bin"
+    if xusb_location == "missing":
+        print("Cannot find xusb.bin")
+        sys.exit(3)
+    try:
+        with open(xusb_location, "rb") as xusb_file:
+            xusb_data = xusb_file.read()
+    except (IOError, OSError) as err:
+        print("Open xusb.bin failed")
+        sys.exit(err)
+
+    with ThreadPoolExecutor(max_workers=8) as executor:
+        futures = [executor.submit(__do_nuwriter, dev, media, start, img_data, xusb_data, option) for dev in devices]
+
+    time.sleep(2)
+
+    # devices = XUsbComList(attach_all=mp_mode).get_dev()
+    _XUsbComListNew = XUsbComList(attach_all=mp_mode)
+    devices = _XUsbComListNew.get_dev()
+
+    data = bytearray(80)
+    # default SOM LED is PJ15
+    data[76] = 9
+    data[77] = 15
+    data[78] = 0
+    data[79] = 1
+    # assign option file to set media info
+    if option == OPT_SETINFO:
+        try:
+            with open("info.json", "r") as json_file:
+                try:
+                    d = json.load(json_file)
+                except json.decoder.JSONDecodeError as err:
+                    print(f"{json_file} parsing error")
+                    sys.exit(err)
+        except (IOError, OSError) as err:
+            print("Open info.json failed")
+            sys.exit(err)
+        # now generate info from info.json
+        for key in d.keys():
+            if key == 'led':
+                for sub_key in d['led'].keys():
+                    if sub_key == 'port':
+                        data[76:77] = int(d['led']['port'], 0).to_bytes(1, byteorder="little")
+                    elif sub_key == 'bit':
+                        data[77:78] = int(d['led']['bit'], 0).to_bytes(1, byteorder="little")
+                    elif sub_key == 'on':
+                        data[78:79] = int(d['led']['on'], 0).to_bytes(1, byteorder="little")
+                    elif sub_key == 'off':
+                        data[79:80] = int(d['led']['off'], 0).to_bytes(1, byteorder="little")
+            if key == 'spinand':
+                data[48] = 1
+                for sub_key in d['spinand'].keys():
+                    if sub_key == 'pagesize':
+                        data[56:58] = int(d['spinand']['pagesize'], 0).to_bytes(2, byteorder="little")
+                    elif sub_key == 'sparearea':
+                        data[58:60] = int(d['spinand']['sparearea'], 0).to_bytes(2, byteorder="little")
+                    elif sub_key == 'quadread':
+                        data[60:61] = int(d['spinand']['quadread'], 0).to_bytes(1, byteorder="little")
+                    elif sub_key == 'readsts':
+                        data[61:62] = int(d['spinand']['readsts'], 0).to_bytes(1, byteorder="little")
+                    elif sub_key == 'writests':
+                        data[62:63] = int(d['spinand']['writests'], 0).to_bytes(1, byteorder="little")
+                    elif sub_key == 'stsvalue':
+                        data[63:64] = int(d['spinand']['stsvalue'], 0).to_bytes(1, byteorder="little")
+                    elif sub_key == 'dummy':
+                        data[64:68] = int(d['spinand']['dummy'], 0).to_bytes(4, byteorder="little")
+                    elif sub_key == 'blkcnt':
+                        data[68:72] = int(d['spinand']['blkcnt'], 0).to_bytes(4, byteorder="little")
+                    elif sub_key == 'pageperblk':
+                        data[72:76] = int(d['spinand']['pageperblk'], 0).to_bytes(4, byteorder="little")
+            elif key == 'spinor':
+                data[28] = 1
+                for sub_key in d['spinor'].keys():
+                    if sub_key == 'quadread':
+                        data[32:33] = int(d['spinor']['quadread'], 0).to_bytes(1, byteorder="little")
+                    elif sub_key == 'readsts':
+                        data[33:34] = int(d['spinor']['readsts'], 0).to_bytes(1, byteorder="little")
+                    elif sub_key == 'writests':
+                        data[34:35] = int(d['spinor']['writests'], 0).to_bytes(1, byteorder="little")
+                    elif sub_key == 'stsvalue':
+                        data[35:36] = int(d['spinor']['stsvalue'], 0).to_bytes(1, byteorder="little")
+                    elif sub_key == 'dummy':
+                        data[36:40] = int(d['spinor']['dummy'], 0).to_bytes(4, byteorder="little")
+            elif key == 'nand':
+                data[20] = 1
+                for sub_key in d['nand'].keys():
+                    if sub_key == 'blkcnt':
+                        data[8:12] = int(d['nand']['blkcnt'], 0).to_bytes(4, byteorder="little")
+                    elif sub_key == 'pageperblk':
+                        data[0:4] = int(d['nand']['pageperblk'], 0).to_bytes(4, byteorder="little")
+    if len(devices) == 0:
+        print("Device not found")
+        sys.exit(2)
+    with ThreadPoolExecutor(max_workers=8) as executor:
+        futures = [executor.submit(__get_info, dev, data) for dev in devices]
+
+    success = 0
+    failed = 0
+    for future in as_completed(futures, timeout=2):
+        if future.result() == 0:
+            success += 1
+        else:
+            failed += 1
+
+    print(f"Successfully get info from {success} device(s)")
+
+
 def do_attach(ini_file_name, option=OPT_NONE) -> None:
     global mp_mode
 
@@ -1078,16 +1269,24 @@ def do_attach(ini_file_name, option=OPT_NONE) -> None:
     except (IOError, OSError) as err:
         print(f"Open {ini_file_name} failed")
         sys.exit(err)
+
+    in_sram = 0
     xusb_location = "missing"
-    if os.path.exists("xusb.bin"):  # default use the xusb.bin in current directory
-        xusb_location = "xusb.bin"
+    if "enc_ma35d1_nuwriter.bin" in ini_file_name:
+        if os.path.exists("nuwriter.bin"):
+            xusb_location = "nuwriter.bin"
+            in_sram = 1
+            print("load nuwriter")
     else:
-        if platform.system() == 'Windows':
-            if os.path.exists(WINDOWS_PATH + "xusb.bin"):
-                xusb_location = WINDOWS_PATH + "xusb.bin"
-        elif platform.system() == 'Linux':
-            if os.path.exists(LINUX_PATH + "xusb.bin"):
-                xusb_location = LINUX_PATH + "xusb.bin"
+        if os.path.exists("xusb.bin"):  # default use the xusb.bin in current directory
+            xusb_location = "xusb.bin"
+        else:
+            if platform.system() == 'Windows':
+                if os.path.exists(WINDOWS_PATH + "xusb.bin"):
+                    xusb_location = WINDOWS_PATH + "xusb.bin"
+            elif platform.system() == 'Linux':
+                if os.path.exists(LINUX_PATH + "xusb.bin"):
+                    xusb_location = LINUX_PATH + "xusb.bin"
     if xusb_location == "missing":
         print("Cannot find xusb.bin")
         sys.exit(3)
@@ -1108,7 +1307,7 @@ def do_attach(ini_file_name, option=OPT_NONE) -> None:
         sys.exit(2)
 
     with ThreadPoolExecutor(max_workers=8) as executor:
-        futures = [executor.submit(__attach, dev, ini_data, xusb_data) for dev in devices]
+        futures = [executor.submit(__attach, dev, ini_data, xusb_data, in_sram) for dev in devices]
     success = 0
     failed = 0
     for future in as_completed(futures, timeout=2):
@@ -1123,7 +1322,10 @@ def do_attach(ini_file_name, option=OPT_NONE) -> None:
     if success == 0:
         return
 
-    time.sleep(1)
+    if in_sram == 1:
+        return
+
+    time.sleep(2)
 
     # devices = XUsbComList(attach_all=mp_mode).get_dev()
     _XUsbComListNew = XUsbComList(attach_all=mp_mode)
@@ -1649,6 +1851,29 @@ def do_convert(cfg_file, option=OPT_NONE) -> None:
     print("Generate output image(s) in directory {} complete".format(now.strftime("%m%d-%H%M%S%f")))
 
 
+def do_txt_convert(cfg_file, option=OPT_NONE) -> None:
+    now = datetime.now()
+
+    binary = bytearray()
+    data = binary[0:4]
+    try:
+        with open(cfg_file, "r") as h_file:
+            for line in h_file.readlines():
+                data += int(line, 16).to_bytes(4, byteorder='little')
+    except (IOError, OSError) as err:
+        print(f"Open {cfg_file} failed")
+        sys.exit(err)
+
+    try:
+        with open("ddr.bin", "wb") as ddr_file:
+            ddr_file.write(data)
+    except (IOError, OSError) as err:
+        print("Create convert ddr file failed")
+        sys.exit(err)
+
+    print("Generate output image(s) in directory complete")
+
+
 def __msc(dev, media, reserve, option) -> int:
 
     cmd = reserve.to_bytes(8, byteorder='little')
@@ -1702,7 +1927,8 @@ def get_media(media) -> int:
         'SPINAND': DEV_SPINAND,
         'SPINOR': DEV_SPINOR,
         'OTP': DEV_OTP,
-        'USBH': DEV_USBH
+        'USBH': DEV_USBH,
+        'USBD': DEV_USBD
     }.get(media, DEV_UNKNOWN)
 
 
@@ -1720,7 +1946,10 @@ def get_option(option) -> int:
         'SETINFO': OPT_SETINFO,
         'CONCAT': OPT_CONCAT,
         'SHOWHDR': OPT_SHOWHDR,
-        'NOCRC': OPT_NOCRC
+        'NOCRC': OPT_NOCRC,
+        '800': OPT_DDR_800,
+        '667': OPT_DDR_667,
+        'DDRINIT': OPT_DDR_INIT
     }.get(option, OPT_UNKNOWN)
 
 
@@ -1811,6 +2040,9 @@ def main():
         else:
             if option == OPT_SHOWHDR:
                 do_showhdr(cfg_file)
+            elif option == OPT_DDR_INIT:
+                # -o ddrinit -c ddr_init.txt
+                do_txt_convert(cfg_file)
             else:
                 do_convert(cfg_file, option)
     elif args.pack:
@@ -1871,6 +2103,7 @@ def main():
         # -w spinor 0x1000 image.bin
         # -w otp otp.json
         # -w nand pack.img
+        # -w usbd ddr.bin
         arg_count = len(args.write)
         if arg_count < 2:
             print("At lease take 2 arguments")
@@ -1892,6 +2125,9 @@ def main():
         if arg_count == 2:
             if media == DEV_OTP:
                 do_otp_program(args.write[1])
+            elif media == DEV_USBD:
+                print("NuWriter")
+                do_nuwriter(media, 0x2803c000, args.write[1], option)
             else:
                 do_pack_program(media, args.write[1], option)
         else:

@@ -90,7 +90,9 @@ class MediaPage(QWidget):
     def warning_writeOTPMedia(self):
         reply = QMessageBox.warning(self,'Warning','WARNING: Unrecoverable damage can occur if the wrong OTP is flashed to the target board! \nAre you sure to write OTP?',QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
         if reply == QMessageBox.Yes:
-            self.writeOTPMedia()
+            reply2 = QMessageBox.warning(self,'Warning','WARNING: You must write the key required by IBR before you can modify PLM! \nAre you sure to write OTP?',QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
+            if reply2 == QMessageBox.Yes:
+                self.writeOTPMedia()
 
     def onRadioToggled(self):
 

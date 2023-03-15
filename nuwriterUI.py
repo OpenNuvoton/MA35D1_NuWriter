@@ -3,6 +3,7 @@
 
 import os
 import sys
+import time
 
 from configparser import ConfigParser
 from webbrowser import open_new
@@ -10,12 +11,12 @@ from PyQt5 import QtCore, QtGui, QtWidgets
 from PyQt5.QtCore import pyqtSignal, QObject, QRunnable, QThreadPool
 
 from nuwriter import (DEV_DDR_SRAM, DEV_NAND, DEV_OTP, DEV_SD_EMMC,
-        DEV_SPINAND, DEV_SPINOR, DEV_USBH,
+        DEV_SPINAND, DEV_SPINOR, DEV_USBH, DEV_USBD, 
         OPT_NONE, OPT_SCRUB, OPT_WITHBAD, OPT_EXECUTE, OPT_VERIFY,
         OPT_UNPACK, OPT_RAW, OPT_EJECT, OPT_SETINFO, OPT_CONCAT, OPT_NOCRC,
         OPT_OTPBLK1, OPT_OTPBLK2, OPT_OTPBLK3, OPT_OTPBLK4, OPT_OTPBLK5, OPT_OTPBLK6, OPT_OTPBLK7,
-        do_attach, do_convert, do_pack, do_stuff, do_unpack, do_img_erase, do_img_program, do_img_read, 
-        do_otp_program, do_otp_erase, do_otp_read,
+        do_attach, do_convert, do_nuwriter, do_pack, do_stuff, do_txt_convert, do_unpack, 
+        do_img_erase, do_img_program, do_img_read, do_otp_program, do_otp_erase, do_otp_read,
         do_pack_program, do_msc, switch_mp_mode)        
 
 from mainwindow import Ui_MainWindow
@@ -66,6 +67,10 @@ class Ui(QtWidgets.QMainWindow, Ui_MainWindow):
         self.browseDDR_btn.clicked.connect(self.iniBrowseDDR)
         self.browseInfo_btn.clicked.connect(self.iniBrowseInfo)
         self.attach_btn.clicked.connect(self.doAttach)
+        
+        self.browseCTDDR_btn.clicked.connect(self.iniBrowseCTDDR)
+        self.DDRconv_btn.clicked.connect(self.doTxtConvert)
+        #self.attach_btn_2.clicked.connect(self.doNuWriter)
        
         self.checkBox_a1.stateChanged.connect(self.checkBox_a_ChangedAction)          
         self.pushButton_a.clicked.connect(self.attachshow)
@@ -95,6 +100,7 @@ class Ui(QtWidgets.QMainWindow, Ui_MainWindow):
         # develop/otp mode setting
         self.dev_mode = False
         self.otp_mode = False
+        self.ct_mode = False
         
         self.tabWidget.setTabVisible(1,self.dev_mode)
         self.tabWidget.setTabVisible(2,self.dev_mode)
@@ -103,10 +109,14 @@ class Ui(QtWidgets.QMainWindow, Ui_MainWindow):
         
         self.tabMedia.setTabVisible(5,self.otp_mode)
         
+        self.groupBox_a2.setVisible(False)
+        self.attach_btn_2.setVisible(False)
+        
         # ToolBar setting         
         self.actionDev.triggered.connect(self.dev_mode_check)
         self.actionOTP.triggered.connect(self.otp_mode_check)
         self.actionMP.triggered.connect(self.mp_mode_check)
+        self.actionCT.triggered.connect(self.ct_mode_check)
         
         self.actionLicense.triggered.connect(self.showLicense)
         self.actionAbout.triggered.connect(self.showManual)
@@ -125,6 +135,12 @@ class Ui(QtWidgets.QMainWindow, Ui_MainWindow):
         
     def mp_mode_check(self):
         switch_mp_mode(True)
+        
+    def ct_mode_check(self):
+        self.ct_mode = not self.ct_mode
+        #self.attach_btn_2.setVisible(self.ct_mode)
+        self.groupBox_a2.setVisible(self.ct_mode)
+        self.groupBox_a1.setVisible(not self.ct_mode)
 
     def showLicense(self):
         reply = QtWidgets.QMessageBox.about(self,'License',' NuWriterGUI Version: 1.01 \n\n NuWriterGUI is based on pyQt5 ')
@@ -374,6 +390,13 @@ class Ui(QtWidgets.QMainWindow, Ui_MainWindow):
         filename, _ = QtWidgets.QFileDialog.getOpenFileName(filter = "json(*.json)")
         if filename != "":
             self.InfoFileLineEdit.setText(filename)
+            
+    def iniBrowseCTDDR(self):
+        filename = ""
+        # Fix for crash in X on Ubuntu 14.04
+        filename, _ = QtWidgets.QFileDialog.getOpenFileName(filter = "txt(*.txt)")
+        if filename != "":
+            self.CTddrFileLineEdit.setText(filename)
     
     def iniBrowseCCFG(self):
         filename = ""
@@ -403,28 +426,65 @@ class Ui(QtWidgets.QMainWindow, Ui_MainWindow):
 
     @QtCore.pyqtSlot()
     def doAttach(self):
-        iniFile = self.ddrFileLineEdit.text()
-        infoFile = self.InfoFileLineEdit.text()
+        if not self.ct_mode:
+            iniFile = self.ddrFileLineEdit.text()
+            infoFile = self.InfoFileLineEdit.text()
+        else:
+            iniFile = "enc_ma35d1_nuwriter.bin"
         if iniFile == "":
             print(f'Ini File missing!')
             return
         
         option = OPT_NONE
-        if self.checkBox_a1.isChecked():
+        if not self.ct_mode and self.checkBox_a1.isChecked():
             option = OPT_SETINFO
             
-        self.conf.set('Attach', 'Ini File', iniFile)
-        self.conf.set('Attach', 'Info File', infoFile)
-        self.conf.write(open(self.iniFilePath, 'w', encoding='utf-8'))
+        if not self.ct_mode:    
+            self.conf.set('Attach', 'Ini File', iniFile)
+            self.conf.set('Attach', 'Info File', infoFile)
+            self.conf.write(open(self.iniFilePath, 'w', encoding='utf-8'))
 
         self.text_browser.clear()
         #print(f'do_attach({iniFile},{option})')
 
         worker = Worker(do_attach, iniFile, option)
+        if self.ct_mode:
+            worker.signals.finished.connect(self.doNuWriter)
+        # Execute
+        self.threadpool.start(worker)
+  
+    @QtCore.pyqtSlot()
+    def doNuWriter(self):
+        time.sleep(1)
+
+        media = DEV_USBD
+        start = 0x2803c000
+        iniFile = "ddr.bin"
+        option = OPT_NONE
+            
+        #self.text_browser.clear()       
+
+        worker = Worker(do_nuwriter, media, start, iniFile , option)
 
         # Execute
         self.threadpool.start(worker)
+     
+    @QtCore.pyqtSlot()
+    def doTxtConvert(self):
+        cfg_file = self.CTddrFileLineEdit.text()
+        if cfg_file == "":
+            print(f'ddr_init.txt missing!')
+            return
         
+        option = OPT_NONE
+
+        self.text_browser.clear()
+
+        worker = Worker(do_txt_convert, cfg_file)
+
+        # Execute
+        self.threadpool.start(worker)
+     
     @QtCore.pyqtSlot()
     def doConvert(self):
         cfg_file = self.ccfgFileLineEdit.text()
@@ -716,7 +776,11 @@ class Ui(QtWidgets.QMainWindow, Ui_MainWindow):
         # Execute
         self.threadpool.start(worker)
     '''
-        
+  
+class WorkerSignals(QObject):
+
+    finished = QtCore.pyqtSignal()
+  
 class Worker(QRunnable):
 
     def __init__(self, fn, *args, **kwargs):
@@ -725,7 +789,10 @@ class Worker(QRunnable):
         self.fn = fn
         self.args = args
         self.kwargs = kwargs
+        
+        self.signals = WorkerSignals()
 
+    @QtCore.pyqtSlot()
     def run(self):
 
         """Long-running task."""
@@ -745,12 +812,13 @@ class Worker(QRunnable):
         except:
             print('except')
             pass
+        self.signals.finished.emit()
 
 if __name__ == "__main__":
 
     app = QtWidgets.QApplication(sys.argv)
     # tool icon
-    app.setWindowIcon(QtGui.QIcon(':/icons/app.ico'))
+    app.setWindowIcon(QtGui.QIcon(':/image/app.ico'))
     myapp = Ui()
     myapp.show()
     sys.exit(app.exec_())
