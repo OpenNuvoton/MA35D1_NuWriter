@@ -5,6 +5,9 @@ import os
 import sys
 import time
 
+import usb.core
+import usb.util
+
 from configparser import ConfigParser
 from webbrowser import open_new
 from PyQt5 import QtCore, QtGui, QtWidgets
@@ -13,7 +16,7 @@ from PyQt5.QtCore import pyqtSignal, QObject, QRunnable, QThreadPool
 from nuwriter import (DEV_DDR_SRAM, DEV_NAND, DEV_OTP, DEV_SD_EMMC,
         DEV_SPINAND, DEV_SPINOR, DEV_USBH, DEV_USBD, 
         OPT_NONE, OPT_SCRUB, OPT_WITHBAD, OPT_EXECUTE, OPT_VERIFY,
-        OPT_UNPACK, OPT_RAW, OPT_EJECT, OPT_SETINFO, OPT_CONCAT, OPT_NOCRC,
+        OPT_UNPACK, OPT_RAW, OPT_EJECT, OPT_SETINFO, OPT_CONCAT, OPT_NOCRC, OPT_DDR_800, OPT_DDR_667,
         OPT_OTPBLK1, OPT_OTPBLK2, OPT_OTPBLK3, OPT_OTPBLK4, OPT_OTPBLK5, OPT_OTPBLK6, OPT_OTPBLK7,
         do_attach, do_convert, do_nuwriter, do_pack, do_stuff, do_txt_convert, do_unpack, 
         do_img_erase, do_img_program, do_img_read, do_otp_program, do_otp_erase, do_otp_read,
@@ -70,7 +73,6 @@ class Ui(QtWidgets.QMainWindow, Ui_MainWindow):
         
         self.browseCTDDR_btn.clicked.connect(self.iniBrowseCTDDR)
         self.DDRconv_btn.clicked.connect(self.doTxtConvert)
-        #self.attach_btn_2.clicked.connect(self.doNuWriter)
        
         self.checkBox_a1.stateChanged.connect(self.checkBox_a_ChangedAction)          
         self.pushButton_a.clicked.connect(self.attachshow)
@@ -110,6 +112,7 @@ class Ui(QtWidgets.QMainWindow, Ui_MainWindow):
         self.tabMedia.setTabVisible(5,self.otp_mode)
         
         self.groupBox_a2.setVisible(False)
+        self.groupBox_a3.setVisible(False)
         self.attach_btn_2.setVisible(False)
         
         # ToolBar setting         
@@ -140,6 +143,7 @@ class Ui(QtWidgets.QMainWindow, Ui_MainWindow):
         self.ct_mode = not self.ct_mode
         #self.attach_btn_2.setVisible(self.ct_mode)
         self.groupBox_a2.setVisible(self.ct_mode)
+        self.groupBox_a3.setVisible(self.ct_mode)
         self.groupBox_a1.setVisible(not self.ct_mode)
 
     def showLicense(self):
@@ -461,6 +465,11 @@ class Ui(QtWidgets.QMainWindow, Ui_MainWindow):
         start = 0x2803c000
         iniFile = "ddr.bin"
         option = OPT_NONE
+        
+        if self.radioButton_s2.isChecked():
+            option = OPT_DDR_800
+        elif self.radioButton_s3.isChecked():
+            option = OPT_DDR_667
             
         #self.text_browser.clear()       
 
