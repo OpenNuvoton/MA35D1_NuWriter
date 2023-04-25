@@ -142,6 +142,16 @@ class PovPage(QWidget):
 
         # [7] TSISWDIS: TSI’s Serial Wire Interface Disable Bit
         self._bit7 = QCheckBox("TSI’s Serial Wire Interface Disable Bit")
+        
+        # [9] boot_iovol
+        self._bit9_0 = QRadioButton("I/O Voltage is 3.3 V")
+        self._bit9_1 = QRadioButton("I/O Voltage is 1.8 V")
+
+        _GroupBit9 = QGroupBox("Boot Source Interface I/O Voltage ")
+        LayoutBit9 = QHBoxLayout()
+        LayoutBit9.addWidget(self._bit9_0)
+        LayoutBit9.addWidget(self._bit9_1)
+        _GroupBit9.setLayout(LayoutBit9)
 
         LayoutOthers = QGridLayout()
         LayoutOthers.addWidget(self._bit2, 0, 0)
@@ -169,13 +179,13 @@ class PovPage(QWidget):
         self._bit12_01 = QRadioButton("NAND Flash page size is 2kB")
         self._bit12_10 = QRadioButton("NAND Flash page size is 4kB")
         self._bit12_11 = QRadioButton("NAND Flash page size is 8kB")
-        _GroupBit12 = QGroupBox("NAND Flash Page Size Selection")
+        self._GroupBit12 = QGroupBox("NAND Flash Page Size Selection")
         LayoutBit12 = QGridLayout()
         LayoutBit12.addWidget(self._bit12_00, 0, 0)
         LayoutBit12.addWidget(self._bit12_01, 0, 1)
         LayoutBit12.addWidget(self._bit12_10, 1, 0)
         LayoutBit12.addWidget(self._bit12_11, 1, 1)
-        _GroupBit12.setLayout(LayoutBit12)
+        self._GroupBit12.setLayout(LayoutBit12)
 
         # [15:14] BTOPTION: Boot Option
         self._bit14_00 = QRadioButton("SPI-NAND Flash with 1-bit mode booting")
@@ -226,6 +236,8 @@ class PovPage(QWidget):
         self._bit5.stateChanged.connect(lambda state: self.checkBit(state, 5))
         self._bit6.stateChanged.connect(lambda state: self.checkBit(state, 6))
         self._bit7.stateChanged.connect(lambda state: self.checkBit(state, 7))
+        self._bit9_0.clicked.connect(lambda: self.updateBits(9, 0))
+        self._bit9_1.clicked.connect(lambda: self.updateBits(9, 1))
 
         self._bit10_00.clicked.connect(lambda: (
             self.change_boot_option(0),
@@ -257,8 +269,9 @@ class PovPage(QWidget):
         mainLayout.addWidget(_GroupBit0)
         mainLayout.addWidget(_GroupBit1)
         mainLayout.addLayout(LayoutOthers)
+        mainLayout.addWidget(_GroupBit9)
         mainLayout.addWidget(_GroupBit10)
-        mainLayout.addWidget(_GroupBit12)
+        mainLayout.addWidget(self._GroupBit12)
         mainLayout.addWidget(self._GroupBit14)
         mainLayout.addWidget(_GroupBits)
         mainLayout.addStretch()
@@ -311,8 +324,8 @@ class PovPage(QWidget):
         self.editPov.setText(hex(self.powerOnVal))
         
     def change_boot_option(self, val):
-    
         if val == 0:
+            self._GroupBit12.setEnabled(False)
             self._GroupBit14.setEnabled(True)
             self._bit14_10.setEnabled(True)
             self._bit14_11.setEnabled(True)
@@ -321,6 +334,7 @@ class PovPage(QWidget):
             self._bit14_10.setText("SPI-NOR Flash with 1-bit mode booting")
             self._bit14_11.setText("SPI-NOR Flash with 4-bit mode booting")
         elif val == 1:
+            self._GroupBit12.setEnabled(False)
             self._GroupBit14.setEnabled(True)
             self._bit14_00.setText("SD0/eMMC0 booting")
             self._bit14_01.setText("SD1/eMMC1 booting")
@@ -329,6 +343,7 @@ class PovPage(QWidget):
             self._bit14_10.setEnabled(False)
             self._bit14_11.setEnabled(False)
         elif val == 2:
+            self._GroupBit12.setEnabled(True)
             self._GroupBit14.setEnabled(True)
             self._bit14_10.setEnabled(True)
             self._bit14_11.setEnabled(True)
@@ -337,7 +352,10 @@ class PovPage(QWidget):
             self._bit14_10.setText("ECC is BCH T24")
             self._bit14_11.setText("No ECC")
         elif val == 3:
+            self._GroupBit12.setEnabled(False)
             self._GroupBit14.setEnabled(False)
+            
+        
 
 class DpmPlmPage(QWidget):
     def __init__(self, dpmVal=0, plmVal = 0, parent=None):
@@ -384,15 +402,16 @@ class DpmPlmPage(QWidget):
         _plmLayout = QHBoxLayout()
         _plmGroup.setLayout(_plmLayout)
 
-        for i, desc in enumerate(["OEM", "Deployed", "RMA", "PRMA"]):
+        for i, desc in enumerate(["OEM", "Deployed", "RMA"]):  #PRMA canceled
             self.plm_btn.append(QRadioButton(desc))
             self.plm_btn[i].clicked.connect(lambda _, i=i: (self.setPlmStage(i)))
             _plmLayout.addWidget(self.plm_btn[i])
 
-        mainLayout = QVBoxLayout()
+        self.mainLayout = QVBoxLayout()
         #mainLayout.addWidget(_dpmGroup)
-        mainLayout.addWidget(_plmGroup)
-        mainLayout.addStretch()
+        self.mainLayout.addWidget(_plmGroup)
+        self.addDplyPwd()
+        self.mainLayout.addStretch()
 
         _valLayout = QHBoxLayout()
 
@@ -400,9 +419,9 @@ class DpmPlmPage(QWidget):
         #_valLayout.addWidget(self.editDpm)
         _valLayout.addWidget(QLabel("PLM Value"))
         _valLayout.addWidget(self.editPlm)
-        mainLayout.addLayout(_valLayout)
+        self.mainLayout.addLayout(_valLayout)
 
-        self.setLayout(mainLayout)
+        self.setLayout(self.mainLayout)
     '''
     def checkDpmBit(self, state, lsb):
 
@@ -417,45 +436,6 @@ class DpmPlmPage(QWidget):
         self.dpmVal |= ((val &_mask) << lsb)
         self.editDpm.setText(hex(self.dpmVal))
     '''
-
-    def setPlmStage(self, i):
-
-        if i < 4:
-            _plm = [0x1, 0x3, 0x7, 0xF]
-            self.plmVal = _plm[i]
-            self.editPlm.setText(hex(self.plmVal))
-
-class MiscPage(QWidget):
-    def __init__(self, parent=None):
-        super(MiscPage, self).__init__(parent)
-
-        self.mainLayout = QVBoxLayout()
-        self.addMacAddress()
-        self.addDplyPwd()
-        self.addSecure()
-        self.addNonSecure()
-        self.mainLayout.addStretch()
-        self.setLayout(self.mainLayout)
-
-    def addMacAddress(self):
-
-        _Group = QGroupBox("MAC address")
-        _Layout = QHBoxLayout()
-        _Group.setLayout(_Layout)
-
-        self.mac0LineEdit = QLineEdit()
-        self.mac1LineEdit = QLineEdit()
-
-        self.mac0LineEdit.setInputMask('HH:HH:HH:HH:HH:HH;_')
-        self.mac1LineEdit.setInputMask('HH:HH:HH:HH:HH:HH;_')
-
-
-        _Layout.addWidget(QLabel("MAC0 address"))
-        _Layout.addWidget(self.mac0LineEdit)
-        _Layout.addWidget(QLabel("MAC1 address"))
-        _Layout.addWidget(self.mac1LineEdit)
-        self.mainLayout.addWidget(_Group)
-
     def addDplyPwd(self):
 
         _Group = QGroupBox("Deployed Password:  0x")
@@ -478,6 +458,41 @@ class MiscPage(QWidget):
         else:
             self.dplypwdEdit.setStyleSheet("border: 2px solid red")
 
+    def setPlmStage(self, i):
+
+        if i < 4:
+            _plm = [0x1, 0x3, 0x7, 0xF]
+            self.plmVal = _plm[i]
+            self.editPlm.setText(hex(self.plmVal))
+
+class MiscPage(QWidget):
+    def __init__(self, parent=None):
+        super(MiscPage, self).__init__(parent)
+
+        self.mainLayout = QVBoxLayout()
+        self.addMacAddress()
+        self.addSecure()
+        self.addNonSecure()
+        self.mainLayout.addStretch()
+        self.setLayout(self.mainLayout)
+
+    def addMacAddress(self):
+
+        _Group = QGroupBox("MAC address")
+        _Layout = QHBoxLayout()
+        _Group.setLayout(_Layout)
+
+        self.mac0LineEdit = QLineEdit()
+        self.mac1LineEdit = QLineEdit()
+
+        self.mac0LineEdit.setInputMask('HH:HH:HH:HH:HH:HH;_')
+        self.mac1LineEdit.setInputMask('HH:HH:HH:HH:HH:HH;_')
+
+        _Layout.addWidget(QLabel("MAC0 address"))
+        _Layout.addWidget(self.mac0LineEdit)
+        _Layout.addWidget(QLabel("MAC1 address"))
+        _Layout.addWidget(self.mac1LineEdit)
+        self.mainLayout.addWidget(_Group)
 
     def addSecure(self):
 
@@ -745,7 +760,7 @@ class OtpPage(QWidget):
         self.tabMedia = QTabWidget()
 
         self.pov = val
-        self.secure_dis = False
+        self.secure_dis = True
 
         self.povPage = PovPage(val, self)
         self.dpm_plmPage = DpmPlmPage(0, 0, self)
@@ -777,12 +792,17 @@ class OtpPage(QWidget):
             return 
        
         block_1 = int.from_bytes(d[0:4], byteorder='little')
+        pos_pin = True
         if block_1 & 0x1 :
             self.povPage._bit0_1.setChecked(True) 
             self.povPage.updateBits(0, 1)
+            #self.povPage.enable_pos(True)
+            pos_pin = True
         else :
             self.povPage._bit0_0.setChecked(True) 
             self.povPage.updateBits(0, 0)
+            #self.povPage.enable_pos(False)
+            pos_pin = False
         if block_1 & 0x2 :
             self.povPage._bit1_1.setChecked(True) 
             self.povPage.updateBits(1, 1)
@@ -804,6 +824,12 @@ class OtpPage(QWidget):
         if block_1 & 0x80 :
             self.povPage._bit7.setChecked(True)
             self.povPage.checkBit(self.povPage._bit7.isChecked(), 7)
+        if block_1 & 0x200 :
+            self.povPage._bit9_1.setChecked(True) 
+            self.povPage.updateBits(9, 1)
+        else :
+            self.povPage._bit9_0.setChecked(True) 
+            self.povPage.updateBits(9, 0)
         if block_1 & 0xC00 == 0xC00:
             self.povPage._bit10_11.setChecked(True)
             self.povPage.change_boot_option(3)
@@ -873,6 +899,11 @@ class OtpPage(QWidget):
         self.povPage._bit6.setStyleSheet(style_sheet)
         self.povPage._bit7.setStyleSheet(style_sheet)
         
+        self.povPage._bit9_0.setEnabled(False)       
+        self.povPage._bit9_1.setEnabled(False)
+        self.povPage._bit9_0.setStyleSheet(style_sheet) 
+        self.povPage._bit9_1.setStyleSheet(style_sheet)
+        
         self.povPage._bit10_00.setEnabled(False)
         self.povPage._bit10_01.setEnabled(False)
         self.povPage._bit10_10.setEnabled(False)
@@ -905,13 +936,15 @@ class OtpPage(QWidget):
         self.povPage._bits_0.setStyleSheet(style_sheet) 
         self.povPage._bits_1.setStyleSheet(style_sheet)
         
+        self.povPage.enable_pos(pos_pin)
+        
         #dpm_plm hide right now 
         #block_2_d = int.from_bytes(d[4:8], byteorder='little')
         block_2_p = int.from_bytes(d[8:12], byteorder='little')
         
         #self.dpm_plmPage.setPlmStage(i)
         
-        for i in range(0, 4):
+        for i in range(0, 3):
             if block_2_p & (0x1 << i):
                 self.dpm_plmPage.plm_btn[i].setChecked(True)
                 self.dpm_plmPage.setPlmStage(i)
@@ -928,9 +961,9 @@ class OtpPage(QWidget):
         self.miscPage.mac1LineEdit.setStyleSheet(style_sheet)
         block_5 = d[28:32].hex()
         if int(block_5,16):
-            self.miscPage.dplypwdEdit.setText(block_5)
-        self.miscPage.dplypwdEdit.setEnabled(False)
-        self.miscPage.dplypwdEdit.setStyleSheet(style_sheet)
+            self.dpm_plmPage.dplypwdEdit.setText(block_5)
+        self.dpm_plmPage.dplypwdEdit.setEnabled(False)
+        self.dpm_plmPage.dplypwdEdit.setStyleSheet(style_sheet)
         block_6 = d[32:120].hex()
         if int(block_6,16):
             self.miscPage.secureText.setPlainText(block_6)
@@ -1016,12 +1049,21 @@ class OtpPage(QWidget):
         for key in d.keys():
             #PovPage fill 
             if key == 'boot_cfg':
+                pos_pin = True
                 if d['boot_cfg'].get('posotp') == "enable":
                     self.povPage._bit0_1.setChecked(True) 
                     self.povPage.updateBits(0, 1)
+                    pos_pin = True
+                elif d['boot_cfg'].get('posotp') == "disable":
+                    self.povPage._bit0_0.setChecked(True) 
+                    self.povPage.updateBits(0, 0)
+                    pos_pin = False
                 if d['boot_cfg'].get('qspiclk') == "50mhz":
                     self.povPage._bit1_1.setChecked(True) 
                     self.povPage.updateBits(1, 1)
+                elif d['boot_cfg'].get('qspiclk') == "30mhz":
+                    self.povPage._bit1_0.setChecked(True) 
+                    self.povPage.updateBits(1, 0)
                 if d['boot_cfg'].get('wdt1en') == "enable":
                     self.povPage._bit2.setChecked(True)
                     self.povPage.checkBit(self.povPage._bit2.isChecked(), 2)
@@ -1043,6 +1085,12 @@ class OtpPage(QWidget):
                 elif d['boot_cfg'].get('tsidbg') == "enable":
                     self.povPage._bit7.setChecked(False)
                     self.povPage.checkBit(self.povPage._bit7.isChecked(), 7)
+                if d['boot_cfg'].get('boot_iovol') == "1_8v":
+                    self.povPage._bit9_1.setChecked(True) 
+                    self.povPage.updateBits(9, 1)
+                elif d['boot_cfg'].get('boot_iovol') == "3_3v":
+                    self.povPage._bit9_0.setChecked(True) 
+                    self.povPage.updateBits(9, 0)
                     
                 if d['boot_cfg'].get('bootsrc') == "spi":
                     self.povPage._bit10_00.setChecked(True)
@@ -1109,6 +1157,8 @@ class OtpPage(QWidget):
                 
                 if d['boot_cfg'].get('secboot') == "disable":
                     self.povPage._bits_1.setChecked(True)
+                    
+                self.povPage.enable_pos(pos_pin)
            
             #dpm_plm fill (hide right now) 
                     
@@ -1123,7 +1173,7 @@ class OtpPage(QWidget):
                         self.dpm_plmPage.dpm_btn[i].setChecked(True)
                         self.dpm_plmPage.checkDpmBit(self.dpm_plmPage.dpm_btn[i].isChecked(), i)
                 '''
-                plm_order = ["oem", "deploy", "rma", "prma"]
+                plm_order = ["oem", "deploy", "rma"]
                 for i, sub_key in enumerate(plm_order):
                     if d['dpm_plm'].get('plm') == sub_key:
                             self.dpm_plmPage.plm_btn[i].setChecked(True)
@@ -1134,7 +1184,7 @@ class OtpPage(QWidget):
             elif key == 'mac1':
                 self.miscPage.mac1LineEdit.setText(d['mac1'])
             elif key == 'dplypwd':
-                self.miscPage.dplypwdEdit.setText(d['dplypwd'])
+                self.dpm_plmPage.dplypwdEdit.setText(d['dplypwd'])
             elif key == 'sec':
                 self.miscPage.secureText.setPlainText(d['sec'])
             elif key == 'nonsec':
@@ -1226,7 +1276,6 @@ class OtpPage(QWidget):
 
     def _exportPov(self):
         # print(f"export POV {self.exportPov.isChecked()}")
-        self.secure_dis = False
         if self.exportPov.isChecked():
             # print(f"POV = {self.povPage.powerOnVal}")
 
@@ -1268,6 +1317,11 @@ class OtpPage(QWidget):
                 boot_cfg["tsidbg"] = "disable"
             else:
                 boot_cfg["tsidbg"] = "enable"
+                
+            if _pov & (1 << 9):
+                boot_cfg["boot_iovol"] = "1_8v"
+            else:
+                boot_cfg["boot_iovol"] = "3_3v"
 
             bootsrc = (_pov >> 10) & 3
 
@@ -1277,26 +1331,22 @@ class OtpPage(QWidget):
                     boot_cfg["bootsrc"] = "sd"
                 elif bootsrc == 2:
                     boot_cfg["bootsrc"] = "nand"
+                    if _pov & (3 << 12):
+                        page = (_pov >> 12) & 3
+                        if page == 1:
+                            boot_cfg["page"] = "2k"
+                        elif page == 2:
+                            boot_cfg["page"] = "4k"
+                        elif page == 3:
+                            boot_cfg["page"] = "8k"                   
+                    else:                       
+                        boot_cfg["page"] = "2k"
                 elif bootsrc == 3:
                     boot_cfg["bootsrc"] = "usb"
             else:
             
                 boot_cfg["bootsrc"] = "spi"
 
-            if _pov & (3 << 12):
-
-                page = (_pov >> 12) & 3
-
-                if page == 1:
-                    boot_cfg["page"] = "2k"
-                elif page == 2:
-                    boot_cfg["page"] = "4k"
-                elif page == 3:
-                    boot_cfg["page"] = "8k"
-            
-            else:
-                
-                boot_cfg["page"] = "2k"
 
             if (bootsrc != 3) and (_pov >> 14) & 3:
 
@@ -1318,8 +1368,11 @@ class OtpPage(QWidget):
                 
                 boot_cfg["option"] = _option[bootsrc]
 
-            sec = self.povPage._bits_1.isChecked()
+            sec = self.povPage._bits_0.isChecked()
             if sec:
+                boot_cfg["secboot"] = "enable"
+                self.secure_dis = False
+            else:
                 boot_cfg["secboot"] = "disable"
                 self.secure_dis = True
             
@@ -1423,7 +1476,7 @@ class OtpPage(QWidget):
     def _exportDplyPwd(self):
 
         if self.exportDplypwd.isChecked():
-            text = self.miscPage.dplypwdEdit.text()
+            text = self.dpm_plmPage.dplypwdEdit.text()
             self.otp_dict["dplypwd"] = text
 
     def _exportSecureNonSecure(self):

@@ -183,7 +183,7 @@ class MediaPage(QWidget):
 
         writeLayout.addRow(QLabel("OTP json"), imgFileLayout)
         
-        otp_genButton = QPushButton('Generate otp.json')
+        otp_genButton = QPushButton('Generate/Read OTP json')
         writeLayout.addRow(QLabel(" "), otp_genButton)
         otp_genButton.clicked.connect(self.OTP_generate)        
 

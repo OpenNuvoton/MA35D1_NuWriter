@@ -15,11 +15,11 @@ from PyQt5.QtCore import pyqtSignal, QObject, QRunnable, QThreadPool
 
 from nuwriter import (DEV_DDR_SRAM, DEV_NAND, DEV_OTP, DEV_SD_EMMC,
         DEV_SPINAND, DEV_SPINOR, DEV_USBH, DEV_USBD, 
-        OPT_NONE, OPT_SCRUB, OPT_WITHBAD, OPT_EXECUTE, OPT_VERIFY,
+        OPT_NONE, OPT_SCRUB, OPT_WITHBAD, OPT_EXECUTE, OPT_VERIFY, OPT_CONVOTP,
         OPT_UNPACK, OPT_RAW, OPT_EJECT, OPT_SETINFO, OPT_CONCAT, OPT_NOCRC, OPT_DDR_800, OPT_DDR_667,
         OPT_OTPBLK1, OPT_OTPBLK2, OPT_OTPBLK3, OPT_OTPBLK4, OPT_OTPBLK5, OPT_OTPBLK6, OPT_OTPBLK7,
         do_attach, do_convert, do_nuwriter, do_pack, do_stuff, do_txt_convert, do_unpack, 
-        do_img_erase, do_img_program, do_img_read, do_otp_program, do_otp_erase, do_otp_read,
+        do_img_erase, do_img_program, do_img_read, do_otp_program, do_otp_erase, do_otp_read, do_otp_convert,
         do_pack_program, do_msc, switch_mp_mode)        
 
 from mainwindow import Ui_MainWindow
@@ -80,7 +80,10 @@ class Ui(QtWidgets.QMainWindow, Ui_MainWindow):
         
         # Convert    
         self.browseCCFG_btn.clicked.connect(self.iniBrowseCCFG)
-        self.convert_btn.clicked.connect(self.doConvert)   
+        self.convert_btn.clicked.connect(self.doConvert) 
+
+        self.browseCJSON_btn.clicked.connect(self.iniBrowseCJSON)
+        self.convert_btn_j.clicked.connect(self.doConvert_otp)         
 
         self.pushButton_c.clicked.connect(self.CCFG_generate)
         self.pushButton_c2.clicked.connect(self.CCFG_show)        
@@ -273,6 +276,7 @@ class Ui(QtWidgets.QMainWindow, Ui_MainWindow):
             self.conf.add_section('Convert')
 
         self.ccfgFileLineEdit.setText(self.conf.get('Convert', 'Config File', fallback=''))
+        self.cjsonFileLineEdit.setText(self.conf.get('Convert', 'Config JSON File', fallback=''))
         
         if not self.conf.has_section('Pack'):
             self.conf.add_section('Pack')
@@ -408,6 +412,13 @@ class Ui(QtWidgets.QMainWindow, Ui_MainWindow):
         filename, _ = QtWidgets.QFileDialog.getOpenFileName(filter = "json(*.json)")
         if filename != "":
             self.ccfgFileLineEdit.setText(filename)
+    
+    def iniBrowseCJSON(self):
+        filename = ""
+        # Fix for crash in X on Ubuntu 14.04
+        filename, _ = QtWidgets.QFileDialog.getOpenFileName(filter = "json(*.json)")
+        if filename != "":
+            self.cjsonFileLineEdit.setText(filename)
             
     def iniBrowsePCFG(self):
         filename = ""
@@ -510,6 +521,24 @@ class Ui(QtWidgets.QMainWindow, Ui_MainWindow):
         #print(f'do_convert({cfg_file},{option})')
 
         worker = Worker(do_convert, cfg_file, option)
+
+        # Execute
+        self.threadpool.start(worker)
+        
+    @QtCore.pyqtSlot()
+    def doConvert_otp(self):
+        cjson_file = self.cjsonFileLineEdit.text()
+        if cjson_file == "":
+            print(f'Config JSON File missing!')
+            return
+        
+        self.conf.set('Convert', 'Config JSON File', cjson_file)
+        self.conf.write(open(self.iniFilePath, 'w', encoding='utf-8'))
+
+        self.text_browser.clear()
+        #print(f'do_convert({cfg_file},{option})')
+
+        worker = Worker(do_otp_convert, cjson_file)
 
         # Execute
         self.threadpool.start(worker)

@@ -65,6 +65,7 @@ OPT_SETINFO = 8     # For set storage info for attach
 OPT_CONCAT = 9      # For convert, concatenate at the end of encrypted data file
 OPT_SHOWHDR = 10    # For convert. Instead of convert, show header content instead
 OPT_NOCRC = 11      # For pack. unpack file without crc32 check
+OPT_CONVOTP = 12    # For convert. convert otp.json to otp.bin
 OPT_DDR_INIT = 1    # For ddr
 OPT_DDR_800 = 2     # For ddr, ddr_pll
 OPT_DDR_667 = 3     # For ddr, ddr_pll
@@ -88,6 +89,9 @@ OPT_OTPKEY2 = 0x40000
 OPT_OTPKEY3 = 0x80000
 OPT_OTPKEY4 = 0x100000
 OPT_OTPKEY5 = 0x200000
+OPT_OTPKEY6 = 0x400000
+OPT_OTPKEY7 = 0x800000
+OPT_OTPKEY8 = 0x1000000
 
 
 # Image type definitions
@@ -205,6 +209,9 @@ def conv_otp(opt_file_name) -> (bytearray, int):
                 if sub_key == 'tsidbg':
                     if d['boot_cfg']['tsidbg'] == 'disable':
                         cfg_val |= 0x80
+                if sub_key == 'boot_iovol':
+                    if d['boot_cfg']['boot_iovol'] == '1_8v':
+                        cfg_val |= 0x200
                 if sub_key == 'bootsrc':
                     if d['boot_cfg']['bootsrc'] == 'sd' or d['boot_cfg']['bootsrc'] == 'emmc':
                         cfg_val |= 0x400
@@ -1121,6 +1128,7 @@ def __do_nuwriter(dev, media, start, img_data, xusb_data, option) -> int:
 def do_nuwriter(media, start, image_file_name, option=OPT_NONE) -> None:
     global mp_mode
 
+    print("load nuwriter")
     # devices = XUsbComList(attach_all=mp_mode).get_dev()
     _XUsbComList = XUsbComList(attach_all=mp_mode)
     devices = _XUsbComList.get_dev()
@@ -1140,7 +1148,8 @@ def do_nuwriter(media, start, image_file_name, option=OPT_NONE) -> None:
     if os.path.exists("xusb.bin"):  # default use the xusb.bin in current directory
         xusb_location = "xusb.bin"
     if xusb_location == "missing":
-        print("Cannot find xusb.bin")
+        #print("Cannot find xusb.bin")
+        print(f"{xusb_location} failed")
         sys.exit(3)
     try:
         with open(xusb_location, "rb") as xusb_file:
@@ -1874,6 +1883,311 @@ def do_txt_convert(cfg_file, option=OPT_NONE) -> None:
     print("Generate output image(s) in directory complete")
 
 
+def do_otp_convert(cfg_file, option=OPT_NONE) -> None:
+    now = datetime.now()
+
+    try:
+        with open(cfg_file, "r") as json_file:
+            try:
+                d = json.load(json_file)
+            except json.decoder.JSONDecodeError as err:
+                print(f"{cfg_file} parsing error")
+                sys.exit(err)
+    except (IOError, OSError) as err:
+        print(f"Open {cfg_file} failed")
+        sys.exit(err)
+    try:
+        os.mkdir(now.strftime("%m%d-%H%M%S%f"))
+    except (IOError, OSError) as err:
+        print("Create output directory failed")
+        sys.exit(err)
+
+    # parse otp.json
+    # Bootcfg, DPM, PLM, and PWD 4 bytes each, MAC addr 8 bytes each, sec/nsec 88 bytes each, 9 keys
+    data = bytearray(608)
+
+    option = 0
+    for key in d.keys():
+        if key == 'boot_cfg':
+            cfg_val = 0
+            for sub_key in d['boot_cfg'].keys():
+                if sub_key == 'posotp':
+                    if d['boot_cfg']['posotp'] == 'enable':
+                        cfg_val |= 1
+                if sub_key == 'qspiclk':
+                    if d['boot_cfg']['qspiclk'] == '50mhz':
+                        cfg_val |= 2
+                if sub_key == 'wdt1en':
+                    if d['boot_cfg']['wdt1en'] == 'enable':
+                        cfg_val |= 4
+                if sub_key == 'uart0en':
+                    if d['boot_cfg']['uart0en'] == 'disable':
+                        cfg_val |= 0x10
+                if sub_key == 'sd0bken':
+                    if d['boot_cfg']['sd0bken'] == 'enable':
+                        cfg_val |= 0x20
+                if sub_key == 'tsiimg':
+                    if d['boot_cfg']['tsiimg'] == 'enable':
+                        cfg_val |= 0x40
+                if sub_key == 'tsidbg':
+                    if d['boot_cfg']['tsidbg'] == 'disable':
+                        cfg_val |= 0x80
+                if sub_key == 'boot_iovol':
+                    if d['boot_cfg']['boot_iovol'] == '1_8v':
+                        cfg_val |= 0x200
+                if sub_key == 'bootsrc':
+                    if d['boot_cfg']['bootsrc'] == 'sd' or d['boot_cfg']['bootsrc'] == 'emmc':
+                        cfg_val |= 0x400
+                    elif d['boot_cfg']['bootsrc'] == 'nand':
+                        cfg_val |= 0x800
+                    elif d['boot_cfg']['bootsrc'] == 'usb':
+                        cfg_val |= 0xC00
+                if sub_key == 'page':
+                    if d['boot_cfg']['page'] == '2k':
+                        cfg_val |= 0x1000
+                    elif d['boot_cfg']['page'] == '4k':
+                        cfg_val |= 0x2000
+                    elif d['boot_cfg']['page'] == '8k':
+                        cfg_val |= 0x3000
+                if sub_key == 'option':
+                    if d['boot_cfg']['option'] == 'sd1' or d['boot_cfg']['option'] == 'emmc1' or \
+                       d['boot_cfg']['option'] == 't12' or d['boot_cfg']['option'] == 'spinand4':
+                        cfg_val |= 0x4000
+                    elif d['boot_cfg']['option'] == 't24' or d['boot_cfg']['option'] == 'spinor1':
+                        cfg_val |= 0x8000
+                    elif d['boot_cfg']['option'] == 'noecc' or d['boot_cfg']['option'] == 'spinor4':
+                        cfg_val |= 0xC000
+                if sub_key == 'secboot':
+                    if d['boot_cfg']['secboot'] == 'disable':
+                        cfg_val |= 0x5A000000
+            data[0:4] = cfg_val.to_bytes(4, byteorder='little')
+            option |= OPT_OTPBLK1
+        elif key == 'dpm_plm':
+            for sub_key in d['dpm_plm'].keys():
+                if sub_key == 'dpm':
+                    dpm_val = 0
+                    for dpm_key in d['dpm_plm']['dpm'].keys():
+                        dpm_val |= get_dpm(dpm_key)
+                    if dpm_val != 0:
+                        data[4:8] = dpm_val.to_bytes(4, byteorder='little')
+                elif sub_key == 'plm':
+                    plm_val = get_plm(d['dpm_plm']['plm'])
+                    if plm_val != 0:
+                        data[8:12] = plm_val.to_bytes(4, byteorder='little')
+            option |= OPT_OTPBLK2
+        elif key == 'mac0':
+            if len(bytes.fromhex(d['mac0'])) != 6:
+                print("mac0 is 6 bytes, please check the size")
+                sys.exit(2)
+            data[12:18] = bytes.fromhex(d['mac0'])
+            option |= OPT_OTPBLK3
+        elif key == 'mac1':
+            if len(bytes.fromhex(d['mac1'])) != 6:
+                print("mac1 is 6 bytes, please check the size")
+                sys.exit(2)
+            data[20:26] = bytes.fromhex(d['mac1'])
+            option |= OPT_OTPBLK4
+        elif key == 'dplypwd':
+            if len(bytes.fromhex(d['dplypwd'])) != 4:
+                print("dplypwd is 4 bytes, please check the size")
+                sys.exit(2)
+            data[28:32] = bytes.fromhex(d['dplypwd'])
+            option |= OPT_OTPBLK5
+        elif key == 'sec':
+            if len(bytes.fromhex(d['sec'])) > 88:
+                print("sec at most 88 bytes, please check the size")
+                sys.exit(2)
+            newkey = bytes.fromhex(d['sec'])
+            newkey += b'\x00' * (88 - len(newkey))
+            data[32:120] = newkey
+            option |= OPT_OTPBLK6
+        elif key == 'nonsec':
+            if len(bytes.fromhex(d['nonsec'])) > 88:
+                print("nonsec at most 88 bytes, please check the size")
+                sys.exit(2)
+            newkey = bytes.fromhex(d['nonsec'])
+            newkey += b'\x00' * (88 - len(newkey))
+            data[120:208] = newkey
+            option |= OPT_OTPBLK7
+        elif key == 'huk0':
+            newkey = bytes.fromhex(d['huk0']['key'])
+            if len(newkey) != 16:
+                print("HUK0 is 128-bit")
+                sys.exit(2)
+            newkey += b'\x00' * (32 - len(newkey))
+            # size - 128-bit
+            newkey += b'\x08\x00\x00\x00'
+            # key number - 0
+            newkey += b'\x00\x00\x00\x00'
+            # meta - owner: cpu, cpu readable
+            newkey += b'\x04\x00\x05\x80'
+            data[208:252] = newkey
+            option |= OPT_OTPKEY0
+
+        elif key == 'huk1':
+            newkey = bytes.fromhex(d['huk1']['key'])
+            if len(newkey) != 16:
+                print("HUK1 is 128-bit")
+                sys.exit(2)
+            newkey += b'\x00' * (32 - len(newkey))
+            # size - 128-bit
+            newkey += b'\x08\x00\x00\x00'
+            # key number - 1
+            newkey += b'\x01\x00\x00\x00'
+            # meta - owner: cpu, cpu readable
+            newkey += b'\x04\x00\x05\x80'
+            data[252:296] = newkeyn 
+            option |= OPT_OTPKEY1
+
+        elif key == 'huk2':
+            newkey = bytes.fromhex(d['huk2']['key'])
+            if len(newkey) != 16:
+                print("HUK0 is 128-bit")
+                sys.exit(2)
+            newkey += b'\x00' * (32 - len(newkey))
+            # size - 128-bit
+            newkey += b'\x08\x00\x00\x00'
+            # key number - 2
+            newkey += b'\x02\x00\x00\x00'
+            # meta - owner: cpu, cpu readable
+            newkey += b'\x04\x00\x05\x80'
+            data[296:340] = newkey
+            option |= OPT_OTPKEY2
+
+        elif key == 'key3':
+            newkey = bytes.fromhex(d['key3']['key'])
+            if len(newkey) != 32:
+                print("key3 is 256-bit")
+                sys.exit(2)
+            newkey += b'\x00' * (32 - len(newkey))
+            # size - 256-bit
+            newkey += b'\x00\x01\x00\x00'
+            # key number - 3
+            newkey += b'\x03\x00\x00\x00'
+
+            if d['key3']['meta'] == 'aes256-unreadable':
+                newkey += b'\x00\x06\x00\x80'
+            elif d['key3']['meta'] == 'aes256-cpu-readable':
+                newkey += b'\x04\x06\x00\x80'
+            elif d['key3']['meta'] == 'sha256-unreadable':
+                newkey += b'\x00\x06\x01\x80'
+            elif d['key3']['meta'] == 'sha256-cpu-readable':
+                newkey += b'\x04\x06\x01\x80'
+            elif d['key3']['meta'] == 'eccp256-unreadable':
+                newkey += b'\x00\x06\x04\x80'
+            elif d['key3']['meta'] == 'eccp256-cpu-readable':
+                newkey += b'\x04\x06\x04\x80'
+            data[340:384] = newkey
+            option |= OPT_OTPKEY3
+
+        elif key == 'key4':
+            newkey = bytes.fromhex(d['key4']['key'])
+            if len(newkey) != 32:
+                print("key4 is 256-bit")
+                sys.exit(2)
+            newkey += b'\x00' * (32 - len(newkey))
+            # size - 256-bit
+            newkey += b'\x00\x01\x00\x00'
+            # key number - 4
+            newkey += b'\x04\x00\x00\x00'
+
+            if d['key4']['meta'] == 'aes256-unreadable':
+                newkey += b'\x00\x06\x00\x80'
+            elif d['key4']['meta'] == 'aes256-cpu-readable':
+                newkey += b'\x04\x06\x00\x80'
+            elif d['key4']['meta'] == 'sha256-unreadable':
+                newkey += b'\x00\x06\x01\x80'
+            elif d['key4']['meta'] == 'sha256-cpu-readable':
+                newkey += b'\x04\x06\x01\x80'
+            elif d['key4']['meta'] == 'eccp256-unreadable':
+                newkey += b'\x00\x06\x04\x80'
+            elif d['key4']['meta'] == 'eccp256-cpu-readable':
+                newkey += b'\x04\x06\x04\x80'
+            data[384:428] = newkey
+            option |= OPT_OTPKEY4
+
+        elif key == 'key5':
+            newkey = bytes.fromhex(d['key5']['key'])
+            if len(newkey) != 32:
+                print("key5 is 256-bit")
+                sys.exit(2)
+            newkey += b'\x00' * (32 - len(newkey))
+            # size - 256-bit
+            newkey += b'\x00\x01\x00\x00'
+            # key number - 5
+            newkey += b'\x05\x00\x00\x00'
+
+            if d['key5']['meta'] == 'aes256-unreadable':
+                newkey += b'\x00\x06\x00\x80'
+            elif d['key5']['meta'] == 'aes256-cpu-readable':
+                newkey += b'\x04\x06\x00\x80'
+            elif d['key5']['meta'] == 'sha256-unreadable':
+                newkey += b'\x00\x06\x01\x80'
+            elif d['key5']['meta'] == 'sha256-cpu-readable':
+                newkey += b'\x04\x06\x01\x80'
+            elif d['key5']['meta'] == 'eccp256-unreadable':
+                newkey += b'\x00\x06\x04\x80'
+            elif d['key5']['meta'] == 'eccp256-cpu-readable':
+                newkey += b'\x04\x06\x04\x80'
+            data[428:472] = newkey
+            option |= OPT_OTPKEY5
+
+        elif key == 'publicx':
+            newkey = bytes.fromhex(d['publicx'])
+            if len(newkey) != 32:
+                print("IBR publicx is 256-bit")
+                sys.exit(2)
+            newkey += b'\x00' * (32 - len(newkey))
+            newkey += b'\x00\x01\x00\x00'    # 256 bits
+            newkey += b'\x06\x00\x00\x00'
+            newkey += b'\x01\x06\x04\x80'
+            data[472:516] = newkey
+            option |= OPT_OTPKEY6
+
+        elif key == 'publicy':
+            newkey = bytes.fromhex(d['publicy'])
+            if len(newkey) != 32:
+                print("IBR publicy is 256-bit")
+                sys.exit(2)
+            newkey += b'\x00' * (32 - len(newkey))
+            newkey += b'\x00\x01\x00\x00'    # 256 bits
+            newkey += b'\x07\x00\x00\x00'
+            newkey += b'\x01\x06\x04\x80'
+            data[516:560] = newkey
+            option |= OPT_OTPKEY7
+
+        elif key == 'aeskey':
+            newkey = bytes.fromhex(d['aeskey'])
+            if len(newkey) != 32:
+                print("IBR aeskey is 256-bit")
+                sys.exit(2)
+            newkey += b'\x00' * (32 - len(newkey))
+            newkey += b'\x00\x01\x00\x00'    # 256 bits
+            newkey += b'\x08\x00\x00\x00'
+            newkey += b'\x01\x06\x00\x80'
+            data[560:604] = newkey
+            option |= OPT_OTPKEY8
+
+        data[604:608] = option.to_bytes(4, byteorder='little')
+
+    try:
+        with open(now.strftime("%m%d-%H%M%S%f") + "/ma35d1_otp.bin", "wb") as otp_file:
+            otp_file.write(data)
+    except (IOError, OSError) as err:
+        print("Create convert otp file failed")
+        sys.exit(err)
+
+    try:
+        os.unlink("conv")
+    except (IOError, OSError):
+        pass
+    try:
+        os.symlink(now.strftime("%m%d-%H%M%S%f"), "conv")
+    except (IOError, OSError):
+        print("Create symbolic folder conv failed")
+    print("Generate output image(s) in directory {} complete".format(now.strftime("%m%d-%H%M%S%f")))
+
+
 def __msc(dev, media, reserve, option) -> int:
 
     cmd = reserve.to_bytes(8, byteorder='little')
@@ -1947,6 +2261,7 @@ def get_option(option) -> int:
         'CONCAT': OPT_CONCAT,
         'SHOWHDR': OPT_SHOWHDR,
         'NOCRC': OPT_NOCRC,
+        'OTP': OPT_CONVOTP,
         '800': OPT_DDR_800,
         '667': OPT_DDR_667,
         'DDRINIT': OPT_DDR_INIT
@@ -2043,6 +2358,9 @@ def main():
             elif option == OPT_DDR_INIT:
                 # -o ddrinit -c ddr_init.txt
                 do_txt_convert(cfg_file)
+            elif option == OPT_CONVOTP:
+                # -o otp -c otp.json
+                do_otp_convert(cfg_file)
             else:
                 do_convert(cfg_file, option)
     elif args.pack:
