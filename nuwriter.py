@@ -908,7 +908,9 @@ def do_img_program(media, start, image_file_name, option=OPT_NONE) -> None:
         sys.exit(2)
     try:
         with open(image_file_name, "rb") as image_file:
+            print("Loading Image...")
             img_data = image_file.read()
+            print("done")
 
     except (IOError, OSError) as err:
         print(f"Open {image_file_name} failed")
