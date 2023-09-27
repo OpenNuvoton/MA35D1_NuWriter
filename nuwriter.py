@@ -445,7 +445,7 @@ def conv_otp(opt_file_name) -> (bytearray, int):
 
 def __img_erase(dev, media, start, length, option) -> int:
 
-    nand_align, spinand_align = dev.get_align()
+    nand_align, spinand_align, npage, nblock, nbcnt, noob, snpage, snblock, snbcnt, snoob, emmc_block = dev.get_align()
 
     if (media == DEV_NAND and nand_align == 0) or \
        (media == DEV_SPINAND and spinand_align == 0):
@@ -703,7 +703,7 @@ def do_otp_read(media, start, out_file_name, length=0x1, option=OPT_NONE) -> Non
 
 def __pack_program(dev, media, pack_image, option) -> int:
 
-    nand_align, spinand_align = dev.get_align()
+    nand_align, spinand_align, npage, nblock, nbcnt, noob, snpage, snblock, snbcnt, snoob, emmc_block = dev.get_align()
     image_cnt = pack_image.img_count()
 
     if (media == DEV_NAND and nand_align == 0) or \
@@ -813,7 +813,7 @@ def do_pack_program(media, pack_file_name, option=OPT_NONE) -> None:
 
 def __img_program(dev, media, start, img_data, option) -> int:
 
-    nand_align, spinand_align = dev.get_align()
+    nand_align, spinand_align, npage, nblock, nbcnt, noob, snpage, snblock, snbcnt, snoob, emmc_block = dev.get_align()
 
     if (media == DEV_NAND and nand_align == 0) or \
        (media == DEV_SPINAND and spinand_align == 0):
@@ -954,28 +954,52 @@ def do_img_read(media, start, out_file_name, length=0x1, option=OPT_NONE) -> Non
     if int.from_bytes(ack, byteorder="little") != ACK:
         print("Receive ACK error")
         return
-    # FIXME: Don't know real length for "read all"
+    # Get real length for "read all"
+    if length == 0:
+        nand_align, spinand_align, npage, nblock, nbcnt, noob, snpage, snblock, snbcnt, snoob, emmc_block = dev.get_align()
+        if (media == DEV_NAND and nbcnt == 0) or (media == DEV_SD_EMMC and emmc_block == 0) \
+           or (media == DEV_SPINAND and snbcnt == 0):
+            print("Unable to get block count")
+            return -1
+        if media == DEV_NAND:
+            if option == OPT_WITHBAD:
+                print("read with bad")
+                length = (npage + noob) * nblock * nbcnt
+            else:
+                length = nand_align * nbcnt
+        elif media == DEV_SPINAND:
+            if option == OPT_WITHBAD:
+                print("read with bad")
+                length = (snpage + snoob) * snblock * snbcnt
+            else:
+                length = spinand_align * snbcnt
+        elif media == DEV_SD_EMMC:
+            length = emmc_block * 512;
+        print(length)
+
     bar = tqdm(total=length, ascii=True, bar_format='{l_bar}{bar:10}{bar:-10b}')
     data = b''
     remain = length
+
+    try:
+        out_file = open(out_file_name, "wb")
+    except (IOError, OSError) as err:
+        print(f"Open {out_file_name} failed")
+        sys.exit(err)
 
     while remain > 0:
         ack = dev.read(4)
         # Get the transfer length of next read
         xfer_size = int.from_bytes(ack, byteorder="little")
 
-        data += dev.read(xfer_size)
+        data = dev.read(xfer_size)
         dev.write(xfer_size.to_bytes(4, byteorder='little'))    # ack
+        out_file.write(data)
         remain -= xfer_size
         bar.update(xfer_size)
-    try:
-        with open(out_file_name, "wb") as out_file:
-            out_file.write(data[0:length])
-    except (IOError, OSError) as err:
-        print(f"Open {out_file_name} failed")
-        sys.exit(err)
 
     bar.close()
+    out_file.close()
 
 
 def __attach(dev, ini_data, xusb_data, in_sram) -> int:
@@ -1066,7 +1090,10 @@ def __get_info(dev, data) -> int:
     print(text)
 
     dev.set_align(info_struct.page_size * info_struct.page_per_blk,
-                  info_struct.snand_page_size * info_struct.snand_page_per_blk)
+                  info_struct.snand_page_size * info_struct.snand_page_per_blk, 
+                  info_struct.page_size, info_struct.page_per_blk, info_struct.blk_cnt, info_struct.oob_size,
+                  info_struct.snand_page_size, info_struct.snand_page_per_blk,
+                  info_struct.snand_blk_cnt, info_struct.snand_oob, info_struct.blk)
 
     return 0
 

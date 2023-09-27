@@ -66,7 +66,7 @@ class XUsbCom:
         return self.id
 
     @staticmethod
-    def set_align(nand, spinand) -> None:
+    def set_align(nand, spinand, npage, nblock, nbcnt, noob, snpage, snblock, snbcnt, snoob, emmc_block) -> None:
         # See if we need to overwrite existing json file.
         overwrite = False
         try:
@@ -79,33 +79,81 @@ class XUsbCom:
                 elif key == 'spinand_align':
                     if spinand != int(cfg['spinand_align']):
                         overwrite = True
+                elif key == 'nand_page':
+                    if npage != int(cfg['nand_page']):
+                        overwrite = True
+                elif key == 'nand_block':
+                    if nblock != int(cfg['nand_block']):
+                        overwrite = True
+                elif key == 'nand_block_cnt':
+                    if nbcnt != int(cfg['nand_block_cnt']):
+                        overwrite = True
+                elif key == 'nand_oob':
+                    if noob != int(cfg['nand_oob']):
+                        overwrite = True
+                elif key == 'spinand_page':
+                    if snpage != int(cfg['spinand_page']):
+                        overwrite = True
+                elif key == 'spinand_block':
+                    if snblock != int(cfg['spinand_block']):
+                        overwrite = True
+                elif key == 'spinand_block_cnt':
+                    if snbcnt != int(cfg['spinand_block_cnt']):
+                        overwrite = True
+                elif key == 'spinand_oob':
+                    if snoob != int(cfg['spinand_oob']):
+                        overwrite = True
+                elif key == 'emmc_block':
+                    if emmc_block != int(cfg['emmc_block']):
+                        overwrite = True
         except (IOError, OSError, json.decoder.JSONDecodeError) as err:
             overwrite = True
 
         if overwrite is True:
             try:
                 with open(".config", "w+") as json_file:
-                    new_key = {'nand_align': nand, 'spinand_align': spinand}
-                    json.dump(new_key, json_file)
+                    new_key = {'nand_align': nand, 'spinand_align': spinand, \
+                        'nand_page': npage, 'nand_block': nblock, 'nand_block_cnt': nbcnt, 'nand_oob': noob,\
+                        'spinand_page': snpage, 'spinand_block': snblock, 'spinand_block_cnt': snbcnt,\
+                        'spinand_oob': snoob, 'emmc_block': emmc_block}
+                    json.dump(new_key, json_file, indent = 4)
             except (IOError, OSError) as err:
                 print("Write .config failed. Please re-attach")
                 sys.exit(err)
 
     @staticmethod
-    def get_align() -> typing.Tuple[int, int]:
+    def get_align() -> typing.Tuple[int, int, int, int, int, int, int, int, int, int, int]:
         try:
             with open(".config", "r") as json_file:
                 cfg = json.load(json_file)
         except (IOError, OSError, json.decoder.JSONDecodeError) as err:
             print("Open/parsing .config failed. Please re-attach")
             sys.exit(err)
-        nand_align = spinand_align = 0
+        nand_align = spinand_align = npage = nblock = nbcnt = noob = snpage = snblock = snbcnt = snoob = emmc_block = 0
         for key in cfg.keys():
             if key == 'nand_align':
                 nand_align = int(cfg['nand_align'])
             elif key == 'spinand_align':
                 spinand_align = int(cfg['spinand_align'])
-        return nand_align, spinand_align
+            elif key == 'nand_page':
+                npage = int(cfg['nand_page'])
+            elif key == 'nand_block':
+                nblock = int(cfg['nand_block'])
+            elif key == 'nand_block_cnt':
+                nbcnt = int(cfg['nand_block_cnt'])
+            elif key == 'nand_oob':
+                noob = int(cfg['nand_oob'])
+            elif key == 'spinand_page':
+                snpage = int(cfg['spinand_page'])
+            elif key == 'spinand_block':
+                snblock = int(cfg['spinand_block'])
+            elif key == 'spinand_block_cnt':
+                snbcnt = int(cfg['spinand_block_cnt'])
+            elif key == 'spinand_oob':
+                snoob = int(cfg['spinand_oob'])
+            elif key == 'emmc_block':
+                emmc_block = int(cfg['emmc_block'])
+        return nand_align, spinand_align, npage, nblock, nbcnt, noob, snpage, snblock, snbcnt, snoob, emmc_block
 
 
 class XUsbComList:
