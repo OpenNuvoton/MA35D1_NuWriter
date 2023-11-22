@@ -119,8 +119,6 @@ class SetInfoPage(QWidget):
         self.mainLayout.addWidget(self.tabMedia)
         self.mainLayout.addWidget(self.gen_Button)
         self.setLayout(self.mainLayout)
-
-        #self.set_info_name("C:\\Users\\PWHSU0\\Desktop\\MA35D1_NuWriter-master\\info.json")  <- For Debug
     
     # use to import exist json to window
     def set_info_name(self, text):

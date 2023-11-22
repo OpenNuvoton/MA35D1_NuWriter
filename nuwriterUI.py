@@ -52,7 +52,7 @@ class Ui(QtWidgets.QMainWindow, Ui_MainWindow):
 
         self.setupUi(self)
 
-        self.setWindowTitle("MA35D1 NuWriter")
+        self.setWindowTitle("MA35 Series NuWriter")
 
         self.addMedia()
 
@@ -153,7 +153,7 @@ class Ui(QtWidgets.QMainWindow, Ui_MainWindow):
         reply = QtWidgets.QMessageBox.about(self,'License',' NuWriterGUI Version: 1.01 \n\n NuWriterGUI is based on pyQt5 ')
     
     def showManual(self):
-        manual_path = "UM_EN_MA35D1_NuWriter.pdf"
+        manual_path = os.path.join("..", "UM_EN_MA35_NuWriter.pdf")
         open_new(manual_path)
     
     def checkBox_a_ChangedAction(self):
@@ -239,12 +239,12 @@ class Ui(QtWidgets.QMainWindow, Ui_MainWindow):
         sys.stderr = sys.__stderr__
 
     ################################################################################################
-    # 'MA35D1.ini'
+    # 'MA35.ini'
     ################################################################################################
 
     def initToolSetting(self):
 
-        self.iniFileName = 'MA35D1.ini'
+        self.iniFileName = 'MA35.ini'
 
         iniFileName = self.iniFileName
 
@@ -445,7 +445,7 @@ class Ui(QtWidgets.QMainWindow, Ui_MainWindow):
             iniFile = self.ddrFileLineEdit.text()
             infoFile = self.InfoFileLineEdit.text()
         else:
-            iniFile = "enc_ma35d1_nuwriter.bin"
+            iniFile = "enc_ma35_nuwriter.bin"
         if iniFile == "":
             print(f'Ini File missing!')
             return

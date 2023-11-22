@@ -784,7 +784,7 @@ def __pack_program(dev, media, pack_image, option) -> int:
     return 0
 
 
-def do_pack_program(media, pack_file_name, option=OPT_NONE) -> None:
+def do_pack_program(media, pack_file_name, option=OPT_NONE) -> int:
     global mp_mode
 
     # devices = XUsbComList(attach_all=mp_mode).get_dev()
@@ -809,6 +809,9 @@ def do_pack_program(media, pack_file_name, option=OPT_NONE) -> None:
     print(f"Successfully programmed {success} device(s)")
     if failed > 0:
         print(f"Failed to program {failed} device(s)")
+        return -1
+
+    return 0
 
 
 def __img_program(dev, media, start, img_data, option) -> int:
@@ -896,7 +899,7 @@ def __img_program(dev, media, start, img_data, option) -> int:
     return 0
 
 
-def do_img_program(media, start, image_file_name, option=OPT_NONE) -> None:
+def do_img_program(media, start, image_file_name, option=OPT_NONE) -> int:
     global mp_mode
 
     # devices = XUsbComList(attach_all=mp_mode).get_dev()
@@ -929,7 +932,9 @@ def do_img_program(media, start, image_file_name, option=OPT_NONE) -> None:
     print(f"Successfully programmed {success} device(s)")
     if failed > 0:
         print(f"Failed to program {failed} device(s)")
+        return -1
 
+    return 0;
 
 def do_img_read(media, start, out_file_name, length=0x1, option=OPT_NONE) -> None:
     # only support read from 1 device
@@ -1284,7 +1289,7 @@ def do_nuwriter(media, start, image_file_name, option=OPT_NONE) -> None:
     print(f"Successfully get info from {success} device(s)")
 
 
-def do_attach(ini_file_name, option=OPT_NONE) -> None:
+def do_attach(ini_file_name, option=OPT_NONE) -> int:
     global mp_mode
 
     init_location = "missing"
@@ -1310,7 +1315,7 @@ def do_attach(ini_file_name, option=OPT_NONE) -> None:
 
     in_sram = 0
     xusb_location = "missing"
-    if "enc_ma35d1_nuwriter.bin" in ini_file_name:
+    if "enc_ma35_nuwriter.bin" in ini_file_name:
         if os.path.exists("nuwriter.bin"):
             xusb_location = "nuwriter.bin"
             in_sram = 1
@@ -1357,11 +1362,13 @@ def do_attach(ini_file_name, option=OPT_NONE) -> None:
     print(f"Successfully attached {success} device(s)")
     if failed > 0:
         print(f"Failed to attach {failed} device(s)")
+        sys.exit(1)
+        
     if success == 0:
-        return
+        return 1
 
     if in_sram == 1:
-        return
+        return 0
 
     time.sleep(2)
 
@@ -1453,8 +1460,10 @@ def do_attach(ini_file_name, option=OPT_NONE) -> None:
             success += 1
         else:
             failed += 1
+            return 1
 
     print(f"Successfully get info from {success} device(s)")
+    return 0
 
 
 def do_unpack(pack_file_name, nocrc32) -> None:
@@ -2200,7 +2209,7 @@ def do_otp_convert(cfg_file, option=OPT_NONE) -> None:
         data[604:608] = option.to_bytes(4, byteorder='little')
 
     try:
-        with open(now.strftime("%m%d-%H%M%S%f") + "/ma35d1_otp.bin", "wb") as otp_file:
+        with open(now.strftime("%m%d-%H%M%S%f") + "/ma35_otp.bin", "wb") as otp_file:
             otp_file.write(data)
     except (IOError, OSError) as err:
         print("Create convert otp file failed")
@@ -2331,7 +2340,7 @@ def main():
 
     parser.add_argument("CONFIG", nargs='?', help="Config file", type=str, default='')
     parser.add_argument("-m", "--massproduct", action='store_true', help="Open/Close Mass Production mode")
-    parser.add_argument("-a", "--attach", action='store_true', help="Attach to MA35D1")
+    parser.add_argument("-a", "--attach", action='store_true', help="Attach to MA35 Series")
     parser.add_argument("-o", "--option", nargs='+', help="Option flag")
     parser.add_argument("-t", "--type", nargs='+', help="Type flag")
     group = parser.add_mutually_exclusive_group()
@@ -2375,7 +2384,8 @@ def main():
         if not cfg_file:
             print("Please assign a DDR ini file")
             sys.exit(0)
-        do_attach(cfg_file, option)
+        if do_attach(cfg_file, option) > 0:
+            sys.exit(1)
 
     if args.convert:
         if cfg_file == '':
@@ -2476,14 +2486,18 @@ def main():
                 print("NuWriter")
                 do_nuwriter(media, 0x2803c000, args.write[1], option)
             else:
-                do_pack_program(media, args.write[1], option)
+                value = do_pack_program(media, args.write[1], option)
+                if value != 0:
+                    sys.exit(1)
         else:
             try:
                 start = int(args.write[1], 0)
             except ValueError as err:
                 print("Wrong start value")
                 sys.exit(err)
-            do_img_program(media, start, args.write[2], option)
+            value = do_img_program(media, start, args.write[2], option)
+            if value != 0:
+                sys.exit(1)
 
     elif args.erase:
         # -e spinor all

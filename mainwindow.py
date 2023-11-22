@@ -1,6 +1,5 @@
 # -*- coding: utf-8 -*-
 
-# Form implementation generated from reading ui file 'C:\Users\PWHSU0\Desktop\MA35D1_NuWriter-master\gui\ma35d1Writer.ui'
 #
 # Created by: PyQt5 UI code generator 5.15.6
 #
