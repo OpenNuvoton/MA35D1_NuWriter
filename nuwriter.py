@@ -1719,7 +1719,7 @@ def do_convert(cfg_file, option=OPT_NONE) -> None:
 
         out += b'\xFF' * 4  # Reserve 4 bytes for image count
 
-        # Generate key file iff secure boot is enabled
+        # Generate key file if secure boot is enabled
         if d["header"]["secureboot"] == 'yes':
 
             try:
@@ -1768,6 +1768,14 @@ def do_convert(cfg_file, option=OPT_NONE) -> None:
             try:
                 with open(img["file"], "rb") as img_file:
                     data = img_file.read()
+                    # pack version
+                    img_file.seek(0, os.SEEK_END)
+                    file_size = img_file.tell()
+                    #print("file size : ", file_size)
+                    for j in range(4 - (file_size % 4)):
+                        data += b'\xff'
+                    data += b'\x20\x54\x56\x4e'  # NVT
+                    data += int(img["offset"], 0).to_bytes(4, byteorder="little")
             except (IOError, OSError) as err:
                 print("Open image file failed")
                 shutil.rmtree(now.strftime("%m%d-%H%M%S%f"))
@@ -1775,7 +1783,8 @@ def do_convert(cfg_file, option=OPT_NONE) -> None:
             try:
                 out += int(img["offset"], 0).to_bytes(4, byteorder="little")
                 out += int(img["loadaddr"], 0).to_bytes(4, byteorder="little")
-                out += os.path.getsize(img["file"]).to_bytes(4, byteorder="little")
+                imgsize = os.path.getsize(img["file"]) + 8
+                out +=  imgsize.to_bytes(4, byteorder="little")
                 out += int(img["type"]).to_bytes(4, byteorder="little")
             except ValueError as err:
                 shutil.rmtree(now.strftime("%m%d-%H%M%S%f"))
@@ -1801,6 +1810,16 @@ def do_convert(cfg_file, option=OPT_NONE) -> None:
 
             else:
                 out += b'\xFF' * 64  # Just pack 0xFF if secure boot is disabled
+                # Write concat image
+                try:
+                    with open(now.strftime("%m%d-%H%M%S%f") + '/' +
+                              os.path.basename(img["file"]), "wb") as concat_file:
+                        concat_file.write(data)
+                except (IOError, OSError) as err:
+                    print("Create encrypt file failed")
+                    shutil.rmtree(now.strftime("%m%d-%H%M%S%f"))
+                    sys.exit(err)
+
 
         # Fill header length
         out[8:12] = int(len(out) - 8).to_bytes(4, byteorder="little")
