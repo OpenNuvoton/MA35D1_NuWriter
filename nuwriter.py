@@ -1772,8 +1772,10 @@ def do_convert(cfg_file, option=OPT_NONE) -> None:
                     img_file.seek(0, os.SEEK_END)
                     file_size = img_file.tell()
                     #print("file size : ", file_size)
+                    cnt = 0
                     for j in range(4 - (file_size % 4)):
                         data += b'\xff'
+                        cnt += 1
                     data += b'\x20\x54\x56\x4e'  # NVT
                     data += int(img["offset"], 0).to_bytes(4, byteorder="little")
             except (IOError, OSError) as err:
@@ -1783,7 +1785,7 @@ def do_convert(cfg_file, option=OPT_NONE) -> None:
             try:
                 out += int(img["offset"], 0).to_bytes(4, byteorder="little")
                 out += int(img["loadaddr"], 0).to_bytes(4, byteorder="little")
-                imgsize = os.path.getsize(img["file"]) + 8
+                imgsize = os.path.getsize(img["file"]) + 8 + cnt
                 out +=  imgsize.to_bytes(4, byteorder="little")
                 out += int(img["type"]).to_bytes(4, byteorder="little")
             except ValueError as err:
