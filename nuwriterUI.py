@@ -363,7 +363,7 @@ class Ui(QtWidgets.QMainWindow, Ui_MainWindow):
             #    page.reservedSize.setText(self.conf.get(section, 'storage size', fallback=''))
             #    page.optEject.setChecked(self.conf.get(section, 'storage option', fallback='') == 'Eject')
                 
-            if section == 'OTP' or section == 'SD':    
+            if section == 'OTP':
                 continue
             else:
                 page.eraseStart.setText(self.conf.get(section, 'erase start', fallback=''))
@@ -606,7 +606,7 @@ class Ui(QtWidgets.QMainWindow, Ui_MainWindow):
                 return
 
             try:
-                length = int(lengthStr, 16) & 0xffffffff
+                length = (int(lengthStr, 16) & 0xffffffff) - start
             except:
                 print(f'Range Setting missing!')
                 return                
@@ -744,7 +744,7 @@ class Ui(QtWidgets.QMainWindow, Ui_MainWindow):
                 return
 
             try:
-                length = int(lengthStr, 16) & 0xffffffff
+                length = (int(lengthStr, 16) & 0xffffffff) - start
             except:
                 print(f'Range Setting missing!')
                 return

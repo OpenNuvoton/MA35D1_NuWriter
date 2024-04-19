@@ -454,6 +454,7 @@ def __img_erase(dev, media, start, length, option) -> int:
 
     if (media == DEV_NAND and start % nand_align != 0) or\
        (media == DEV_SPINAND and start % spinand_align != 0) or \
+       (media == DEV_SD_EMMC and start % 512 != 0) or \
        (media == DEV_SPINOR and start % SPINOR_ALIGN != 0):
         print("Starting address must be block aligned")
         return -1
@@ -2531,7 +2532,7 @@ def main():
         media = get_media(args.erase[0])
 
         try:
-            if media in [DEV_DDR_SRAM, DEV_SD_EMMC, DEV_UNKNOWN]:
+            if media in [DEV_DDR_SRAM, DEV_UNKNOWN]:
                 raise ValueError(f"{str.upper(args.erase[0])} does not support erase")
             if arg_count == 2 and str.upper(args.erase[1]) != 'ALL' and media != DEV_OTP:
                 raise ValueError("Unknown arguments")
