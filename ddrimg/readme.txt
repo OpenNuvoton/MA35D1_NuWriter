@@ -24,21 +24,21 @@
 --------------------------------------------+-----------------------------------------------------------------
  enc_ddr3_zentel_1gb.bin                    | Zentel DDR3 1GB
 --------------------------------------------+-----------------------------------------------------------------
- MA35D15A087C_NonMCP_WBDDR3L_1GB.bin        | LFBGA-364 NonMCP 1PCS DDR3 WINBOND 1GB(W638GU6QB11I)
+ MA35D15A087C_W638GU6QB_1PCS.bin            | LFBGA-364 NonMCP 1PCS DDR3 WINBOND 1GB(W638GU6QB11I)
 --------------------------------------------+-----------------------------------------------------------------
- MA35D15A087C_NonMCP_WBDDR3L_512MB.bin      | LFBGA-364 NonMCP 1PCS DDR3 WINBOND 512MB(W634GU6NB15I)
+ MA35D15A087C_W638GU6QB_2PCS.bin            | LFBGA-364 NonMCP 2PCS DDR3 WINBOND 1GB(W638GU6QB11I)
 --------------------------------------------+-----------------------------------------------------------------
- MA35D15A087C_NonMCP_WBDDR3L_512MBx2.bin    | LFBGA-364 NonMCP 2PCS DDR3 WINBOND 512MB(W634GU6NB15I)
+ MA35D15A087C_W634GU6NB_1PCS.bin            | LFBGA-364 NonMCP 1PCS DDR3 WINBOND 512MB(W634GU6NB15I)
 --------------------------------------------+-----------------------------------------------------------------
- MA35D16A087C_NonMCP_WBDDR3L_1GB.bin        | LFBGA-364 NonMCP 1PCS DDR3 WINBOND 1GB(W638GU6QB11I)
+ MA35D15A087C_W634GU6NB_2PCS.bin            | LFBGA-364 NonMCP 2PCS DDR3 WINBOND 512MB(W634GU6NB15I)
 --------------------------------------------+-----------------------------------------------------------------
- MA35D16A087C_NonMCP_WBDDR3L_512MB.bin      | LFBGA-364 NonMCP 1PCS DDR3 WINBOND 512MB(W634GU6NB15I)
+ MA35D16A087C_W638GU6QB_1PCS.bin            | LFBGA-364 NonMCP 1PCS DDR3 WINBOND 1GB(W638GU6QB11I)
 --------------------------------------------+-----------------------------------------------------------------
- MA35D16A087C_NonMCP_WBDDR3L_512MBx2.bin    | LFBGA-364 NonMCP 2PCS DDR3 WINBOND 512MB(W634GU6NB15I)
+ MA35D16A087C_W638GU6QB_2PCS.bin            | LFBGA-364 NonMCP 2PCS DDR3 WINBOND 1GB(W638GU6QB11I)
 --------------------------------------------+-----------------------------------------------------------------
- MA35D15A087C_NonMCP_WBDDR3L_1GBx2.bin      | LFBGA-364 NonMCP 2PCS DDR3 WINBOND 1GB(W638GU6QB11I)
+ MA35D16A087C_W634GU6NB_1PCS.bin            | LFBGA-364 NonMCP 1PCS DDR3 WINBOND 512MB(W634GU6NB15I)
 --------------------------------------------+-----------------------------------------------------------------
- MA35D16A087C_NonMCP_WBDDR3L_1GBx2.bin      | LFBGA-364 NonMCP 2PCS DDR3 WINBOND 1GB(W638GU6QB11I)
+ MA35D16A087C_W634GU6NB_2PCS.bin            | LFBGA-364 NonMCP 2PCS DDR3 WINBOND 512MB(W634GU6NB15I)
 --------------------------------------------+-----------------------------------------------------------------
  MA35D03F764C.bin                           | LQFP216 DDR2 WINBOND 128MB(W971G16NG18I_A02)
 --------------------------------------------+-----------------------------------------------------------------
