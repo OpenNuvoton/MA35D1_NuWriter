@@ -1,9 +1,11 @@
 
 #!/usr/bin/python3
-
+import collections
 import os
 import sys
 import time
+import re
+import requests
 
 import usb.core
 import usb.util
@@ -29,6 +31,10 @@ from gui.otpPage import OtpPage
 from gui.generateCCFG import CCFG_MainPage
 from gui.generatePCFG import PCFG_MainPage
 
+from gui.progress import ProgressDialog 
+
+Version = "v1.02"
+
 class EmittingStream(QtCore.QObject):
 
     textWritten = QtCore.pyqtSignal(str)
@@ -46,7 +52,40 @@ try:
 except ImportError:
     pass
         
+class UpdateDialog(QtWidgets.QDialog):
+    def __init__(self, latest_version, download_url, parent=None):
+        super(UpdateDialog, self).__init__(parent)
+        self.latest_version = latest_version
+        self.download_url = download_url
+        self.setWindowTitle("Update Available")
+        
+        layout = QtWidgets.QVBoxLayout(self)
+        self.label = QtWidgets.QLabel(
+            f"A new version ({latest_version}) is available. Would you like to download it?"
+        )
+        layout.addWidget(self.label)
+        
+        self.not_show_again_checkbox = QtWidgets.QCheckBox("Do not show this again")
+        layout.addWidget(self.not_show_again_checkbox)
+        
+        button_layout = QtWidgets.QHBoxLayout()
+        self.download_button = QtWidgets.QPushButton("Download")
+        self.cancel_button = QtWidgets.QPushButton("Cancel")
+        button_layout.addWidget(self.download_button)
+        button_layout.addWidget(self.cancel_button)
+        layout.addLayout(button_layout)
+        
+        self.download_button.clicked.connect(self.download)
+        self.cancel_button.clicked.connect(self.reject)
+    
+    def download(self):
+        import webbrowser
+        webbrowser.open_new(self.download_url)
+        self.accept()        
+
 class Ui(QtWidgets.QMainWindow, Ui_MainWindow):
+    numbersChanged = QtCore.pyqtSignal(str, int, int, int, int)
+    
     def __init__(self):
         QtWidgets.QMainWindow.__init__(self) # Call the inherited classes __init__ method
 
@@ -61,10 +100,13 @@ class Ui(QtWidgets.QMainWindow, Ui_MainWindow):
 
         # Install the custom output stream
         self.outputStream = EmittingStream(textWritten=self.normalOutputWritten)
+        self.progressStream = EmittingStream(textWritten=self.progressOutputWritten)
         sys.stdout = self.outputStream
-        sys.stderr = self.outputStream
+        sys.stderr = self.progressStream
 
         self.initToolSetting()
+        
+        self.Progress_window = ProgressDialog(self)
 
         # Attach
         self.browseDDR_btn.clicked.connect(self.iniBrowseDDR)
@@ -74,7 +116,7 @@ class Ui(QtWidgets.QMainWindow, Ui_MainWindow):
         self.browseCTDDR_btn.clicked.connect(self.iniBrowseCTDDR)
         self.DDRconv_btn.clicked.connect(self.doTxtConvert)
        
-        self.checkBox_a1.stateChanged.connect(self.checkBox_a_ChangedAction)          
+        self.checkBox_a1.stateChanged.connect(self.checkBox_a_ChangedAction)
         self.pushButton_a.clicked.connect(self.attachshow)
         self.checkBox_a_ChangedAction()
         
@@ -83,10 +125,10 @@ class Ui(QtWidgets.QMainWindow, Ui_MainWindow):
         self.convert_btn.clicked.connect(self.doConvert) 
 
         self.browseCJSON_btn.clicked.connect(self.iniBrowseCJSON)
-        self.convert_btn_j.clicked.connect(self.doConvert_otp)         
+        self.convert_btn_j.clicked.connect(self.doConvert_otp)
 
         self.pushButton_c.clicked.connect(self.CCFG_generate)
-        self.pushButton_c2.clicked.connect(self.CCFG_show)        
+        self.pushButton_c2.clicked.connect(self.CCFG_show)
         
         # Pack 
         self.browsePCFG_btn.clicked.connect(self.iniBrowsePCFG)
@@ -95,7 +137,7 @@ class Ui(QtWidgets.QMainWindow, Ui_MainWindow):
         self.pushButton_p.clicked.connect(self.PCFG_generate)
         if self.pcfgImgNumEdit.text() == "":
             self.pushButton_p.setEnabled(False)
-        self.pcfgImgNumEdit.textChanged.connect(self.pcfgImgNumEdit_ChangedAction)               
+        self.pcfgImgNumEdit.textChanged.connect(self.pcfgImgNumEdit_ChangedAction)
 
         self.browseUPCFG_btn.clicked.connect(self.iniBrowseUPCFG)
         self.unpack_btn.clicked.connect(self.doUnpack) 
@@ -124,9 +166,72 @@ class Ui(QtWidgets.QMainWindow, Ui_MainWindow):
         self.actionMP.triggered.connect(self.mp_mode_check)
         self.actionCT.triggered.connect(self.ct_mode_check)
         
+        #self.actionProgress = QtWidgets.QAction("Progress bar", self)
+        #self.menuFile.addAction(self.actionProgress)
+        #self.actionProgress.triggered.connect(self.showProgress)
+        
+        # debug
+        #self.actionDebug = QtWidgets.QAction("debug test", self)
+        #self.menuFile.addAction(self.actionDebug)
+        #self.actionDebug.triggered.connect(self.testDebug)
+        # debug
+        
         self.actionLicense.triggered.connect(self.showLicense)
         self.actionAbout.triggered.connect(self.showManual)
-    
+        
+        self.actionCheckUpdate = QtWidgets.QAction("Update Check", self)
+        self.menuAbout.addAction(self.actionCheckUpdate)
+   
+        self.actionCheckUpdate.triggered.connect(self.checkForUpdates_manual)
+        
+        self.checkForUpdates()
+        
+    def checkForUpdates(self):
+        if self.conf.has_section("Update") and self.conf.getboolean("Update", "disable_update_check", fallback=False):
+            return
+        try:
+            url = "https://api.github.com/repos/OpenNuvoton/MA35D1_NuWriter/tags"
+            response = requests.get(url, timeout=5)
+            if response.status_code == 200:
+                data = response.json()
+                latest_version = "v0.00"
+                for tag in data:
+                    tmp_v = tag.get("name", "v0.00")
+                    latest_version = latest_version if (latest_version > tmp_v) else tmp_v
+                if latest_version > Version:
+                    download_url = "https://github.com/OpenNuvoton/MA35D1_NuWriter/tags"
+                    dialog = UpdateDialog(latest_version, download_url, self)
+                    if dialog.exec_() == QtWidgets.QDialog.Accepted:
+                        pass
+                    if dialog.not_show_again_checkbox.isChecked():
+                        if not self.conf.has_section("Update"):
+                            self.conf.add_section("Update")
+                        self.conf.set("Update", "disable_update_check", "true")
+                        with open(self.iniFilePath, "w", encoding="utf-8") as f:
+                            self.conf.write(f)
+        except Exception as e:
+            print("Error checking for updates:", e)
+            
+    def checkForUpdates_manual(self, at):
+        try:
+            url = "https://api.github.com/repos/OpenNuvoton/MA35D1_NuWriter/tags"
+            response = requests.get(url, timeout=5)
+            if response.status_code == 200:
+                data = response.json()
+                latest_version = "v0.00"
+                for tag in data:
+                    tmp_v = tag.get("name", "v0.00")
+                    latest_version = latest_version if (latest_version > tmp_v) else tmp_v
+                if latest_version > Version:
+                    download_url = "https://github.com/OpenNuvoton/MA35D1_NuWriter/tags"
+                    dialog = UpdateDialog(latest_version, download_url, self)
+                    if dialog.exec_() == QtWidgets.QDialog.Accepted:
+                        pass
+                else:
+                    reply = QtWidgets.QMessageBox.about(self,'Update',' NuWriterGUI Version: ' + Version + '\n\n is already the newest one! ')
+        except Exception as e:
+            print("Error checking for updates:", e)
+            
     def dev_mode_check(self):
         self.dev_mode = not self.dev_mode
         
@@ -150,11 +255,53 @@ class Ui(QtWidgets.QMainWindow, Ui_MainWindow):
         self.groupBox_a1.setVisible(not self.ct_mode)
 
     def showLicense(self):
-        reply = QtWidgets.QMessageBox.about(self,'License',' NuWriterGUI Version: 1.01 \n\n NuWriterGUI is based on pyQt5 ')
+        reply = QtWidgets.QMessageBox.about(self,'License',' NuWriterGUI Version: ' + Version + '\n\n NuWriterGUI is based on pyQt5 ')
     
     def showManual(self):
         manual_path = os.path.join("..", "UM_EN_MA35_NuWriter.pdf")
         open_new(manual_path)
+    
+    def showProgress(self):
+        self.Progress_window.progress_reset()
+        self.Progress_window.show()
+    
+    #debug
+    def testDebug(self):
+        self.text_browser.clear()
+        
+        worker = Worker(self.test_debug, 0)
+        worker2 = Worker(self.test_debug, 1)
+        worker3 = Worker(self.test_debug_pack, 2)
+        worker4 = Worker(self.test_debug_pack, 3)
+        self.threadpool.start(worker)
+        self.threadpool.start(worker2)
+        self.threadpool.start(worker3)
+        self.threadpool.start(worker4)
+            
+    def test_debug_pack(self, index):
+        from tqdm import tqdm
+        for j in range(1, 3):
+            if index % 2 == 0:
+                text = f"device {index} Programming {j}/2"
+            else:
+                text = f"device {index} Verifying {j}/2"
+            bar = tqdm(total=100, position=index, ascii=True, desc=text, bar_format='{l_bar}{bar:10}{bar:-10b}')
+            for i in range(0, 100):
+                bar.update(1)
+                time.sleep(0.02)
+                
+    def test_debug(self, index):
+        from tqdm import tqdm
+        if index % 2 == 0:
+            text = f"device {index} Programming "
+        else:
+            text = f"device {index} Verifying "
+        bar = tqdm(total=100, position=index, ascii=True, desc=text, bar_format='{l_bar}{bar:10}{bar:-10b}')
+        for i in range(0, 100):
+            bar.update(1)
+            time.sleep(0.04)
+
+    #debug
     
     def checkBox_a_ChangedAction(self):
         if self.checkBox_a1.isChecked():
@@ -384,6 +531,67 @@ class Ui(QtWidgets.QMainWindow, Ui_MainWindow):
             text = "\n" + text
         self.text_browser.insertPlainText(text)
         self.text_browser.moveCursor(QtGui.QTextCursor.End)
+
+    def progressOutputWritten(self, raw_text):
+        try:
+            ANSI_RE = re.compile(r'\x1B\[[0-?]*[ -/]*[@-~]')
+            BAR_PCK_RE = re.compile(
+                r'''
+                    ^device\s+
+                    (?P<dev>\d+)\s+                       # ← dev.get_id()
+                    (?P<action>Programming|Verifying)\s+  # literal word
+                    (?P<i>\d+)/(?P<X>\d+)\s*              # x / X
+                    :?\s*                                 # tqdm adds “:  ”
+                    [^\d%]*?                              # skip to first %
+                    (?P<pct>\d{1,3})%                     # 0-100
+                ''',
+                re.X | re.ASCII
+            )
+            
+            BAR_RE = re.compile(
+                r'''
+                    ^device\s+
+                    (?P<dev>\d+)\s+                       # ← dev.get_id()
+                    (?P<action>Programming|Verifying)\s+  # literal word
+                    :?\s*                                 # tqdm adds “:  ”
+                    [^\d%]*?                              # skip to first %
+                    (?P<pct>\d{1,3})%                     # 0-100
+                ''',
+                re.X | re.ASCII
+            )
+            
+            text = ANSI_RE.sub('', raw_text).lstrip('\r')
+            if not text or text in ('\n', '\r\n'):
+                return
+       
+            bar_pck_m = BAR_PCK_RE.match(text) 
+            bar_m = BAR_RE.match(text)
+            
+            if bar_pck_m:
+                phase = bar_pck_m['action'].strip()
+                pos = int(bar_pck_m['dev']) + 1
+                pct = int(bar_pck_m['pct'])
+                img_i = int(bar_pck_m['i'])
+                img_x = int(bar_pck_m['X'])
+                if not self.Progress_window.isVisible():
+                    self.showProgress()
+                self.Progress_window.updateRequested.emit(phase, pos, pct, img_i, img_x)
+                return
+            elif bar_m:
+                phase = bar_m['action'].strip()
+                pos = int(bar_m['dev']) + 1
+                pct = int(bar_m['pct'])
+                if not self.Progress_window.isVisible():
+                    self.showProgress()
+                self.Progress_window.updateRequested.emit(phase, pos, pct, 0, 0)
+                return
+                
+            if text.startswith("Successfully") or text.startswith("Failed"):
+                text = "\n" + text
+            self.text_browser.insertPlainText(text)
+            self.text_browser.moveCursor(QtGui.QTextCursor.End)
+        except Exception as e:
+            print("Error checking for updates:", e)
 
     def iniBrowseDDR(self):
         filename = ""
@@ -856,7 +1064,7 @@ if __name__ == "__main__":
 
     app = QtWidgets.QApplication(sys.argv)
     # tool icon
-    app.setWindowIcon(QtGui.QIcon(':/image/app.ico'))
+    app.setWindowIcon(QtGui.QIcon(':/gui/images/NuWriter.ico'))
     myapp = Ui()
     myapp.show()
     sys.exit(app.exec_())

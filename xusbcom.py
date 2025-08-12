@@ -21,6 +21,9 @@ class XUsbCom:
         self.attach = False
         self.id = 0
         self.info = b''
+        
+        self.bus = 0
+        self.address = 0
 
     def write(self, data) -> None:
         try:
@@ -64,6 +67,18 @@ class XUsbCom:
 
     def get_id(self) -> int:
         return self.id
+        
+    def set_bus(self, i) -> None:
+        self.bus = i
+
+    def get_bus(self) -> int:
+        return self.bus
+    
+    def set_address(self, i) -> None:
+        self.address = i
+
+    def get_address(self) -> int:
+        return self.address
 
     @staticmethod
     def set_align(nand, spinand, npage, nblock, nbcnt, noob, snpage, snblock, snbcnt, snoob, emmc_block) -> None:
@@ -182,8 +197,13 @@ class XUsbComList:
                 sys.exit(err)
 
         for i in range(0, len(self.devices)):
+            dev = self.devices[i]
+            bus = dev.bus
+            address = dev.address
             self.devices[i] = XUsbCom(self.devices[i])
             self.devices[i].set_id(i)
+            self.devices[i].set_bus(bus)
+            self.devices[i].set_address(address)
 
     def __del__(self):
         if len(self.devices) != 0:

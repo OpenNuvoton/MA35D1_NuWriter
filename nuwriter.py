@@ -82,6 +82,12 @@ OPT_OTPBLK6 = 0x2000
 OPT_OTPBLK7 = 0x4000
 OPT_OTPKEY = 0x8000
 
+# for otp lock
+OPT_OTPBLK1_LOCK = 0x10000000
+OPT_OTPBLK3_LOCK = 0x20000000
+OPT_OTPBLK4_LOCK = 0x40000000
+OPT_OTPBLK5_LOCK = 0x80000000
+
 # for key lock
 OPT_OTPKEY0 = 0x10000
 OPT_OTPKEY1 = 0x20000
@@ -106,9 +112,35 @@ IMG_DTB = 6
 # If attach is a must. maybe better for real chip.
 # devices = []
 mp_mode = False
+bus_arr = [0, 0, 0, 0, 0, 0, 0, 0]
+address_arr = [0, 0, 0, 0, 0, 0, 0, 0]
 
 WINDOWS_PATH = "C:\\Program Files (x86)\\Nuvoton Tools\\NuWriter\\"
 LINUX_PATH = "/usr/share/nuwriter/"
+
+def bus_address(bus, address):
+    global bus_arr
+    global address_arr
+    
+    for i in range(8):
+        if bus_arr[i] == bus and address_arr[i] == address:
+            return i
+    for j in range(8):
+        if bus_arr[j] == 0 and address_arr[j] == 0:
+            bus_arr[j] = bus
+            address_arr[j] = address
+            return j
+    return -1
+    
+def reset_bus_address(bus, address):
+    global bus_arr
+    global address_arr
+    
+    bus_arr[0] = bus
+    address_arr[0] = address
+    for i in range(1, 8):
+        bus_arr[i] = 0
+        address_arr[i] = 0
 
 def switch_mp_mode(flag):
     global mp_mode
@@ -180,8 +212,8 @@ def conv_otp(opt_file_name) -> (bytearray, int):
     except (IOError, OSError) as err:
         print(f"Open {opt_file_name} failed")
         sys.exit(err)
-    # Bootcfg, DPM, PLM, and PWD 4 bytes each, MAC addr 8 bytes each, sec/nsec 88 bytes each
-    data = bytearray(208)
+    # Bootcfg, DPM, PLM, and PWD 4 bytes each, MAC addr 8 bytes each, sec/nsec 88 bytes each, 9 keys
+    data = bytearray(608)
 
     option = 0
     for key in d.keys():
@@ -237,6 +269,9 @@ def conv_otp(opt_file_name) -> (bytearray, int):
                 if sub_key == 'secboot':
                     if d['boot_cfg']['secboot'] == 'disable':
                         cfg_val |= 0x5A000000
+                if sub_key == 'lock':
+                    if d['boot_cfg']['lock'] == 'enable':
+                        option |= OPT_OTPBLK1_LOCK
             data[0:4] = cfg_val.to_bytes(4, byteorder='little')
             option |= OPT_OTPBLK1
         elif key == 'dpm_plm':
@@ -253,22 +288,37 @@ def conv_otp(opt_file_name) -> (bytearray, int):
                         data[8:12] = plm_val.to_bytes(4, byteorder='little')
             option |= OPT_OTPBLK2
         elif key == 'mac0':
-            if len(bytes.fromhex(d['mac0'])) != 6:
-                print("mac0 is 6 bytes, please check the size")
-                sys.exit(2)
-            data[12:18] = bytes.fromhex(d['mac0'])
+            for sub_key in d['mac0'].keys():
+                if sub_key == 'mac':
+                    if len(bytes.fromhex(d['mac0']['mac'])) != 6:
+                        print("mac0 is 6 bytes, please check the size")
+                        sys.exit(2)
+                    data[12:18] = bytes.fromhex(d['mac0']['mac'])
+                if sub_key == 'lock':
+                    if d['mac0']['lock'] == 'enable':
+                        option |= OPT_OTPBLK3_LOCK
             option |= OPT_OTPBLK3
         elif key == 'mac1':
-            if len(bytes.fromhex(d['mac1'])) != 6:
-                print("mac1 is 6 bytes, please check the size")
-                sys.exit(2)
-            data[20:26] = bytes.fromhex(d['mac1'])
+            for sub_key in d['mac1'].keys():
+                if sub_key == 'mac':
+                    if len(bytes.fromhex(d['mac1']['mac'])) != 6:
+                        print("mac1 is 6 bytes, please check the size")
+                        sys.exit(2)
+                    data[20:26] = bytes.fromhex(d['mac1']['mac'])
+                if sub_key == 'lock':
+                    if d['mac1']['lock'] == 'enable':
+                        option |= OPT_OTPBLK4_LOCK
             option |= OPT_OTPBLK4
         elif key == 'dplypwd':
-            if len(bytes.fromhex(d['dplypwd'])) != 4:
-                print("dplypwd is 4 bytes, please check the size")
-                sys.exit(2)
-            data[28:32] = bytes.fromhex(d['dplypwd'])
+            for sub_key in d['dplypwd'].keys():
+                if sub_key == 'pwd':
+                    if len(bytes.fromhex(d['dplypwd']['pwd'])) != 4:
+                        print("dplypwd is 4 bytes, please check the size")
+                        sys.exit(2)
+                    data[28:32] = bytes.fromhex(d['dplypwd']['pwd'])
+                if sub_key == 'lock':
+                    if d['dplypwd']['lock'] == 'enable':
+                        option |= OPT_OTPBLK5_LOCK
             option |= OPT_OTPBLK5
         elif key == 'sec':
             if len(bytes.fromhex(d['sec'])) > 88:
@@ -298,7 +348,8 @@ def conv_otp(opt_file_name) -> (bytearray, int):
             newkey += b'\x00\x00\x00\x00'
             # meta - owner: cpu, cpu readable
             newkey += b'\x04\x00\x05\x80'
-            data += newkey
+            data[208:252] = newkey
+            option |= OPT_OTPKEY0
 
         elif key == 'huk1':
             newkey = bytes.fromhex(d['huk1']['key'])
@@ -312,7 +363,8 @@ def conv_otp(opt_file_name) -> (bytearray, int):
             newkey += b'\x01\x00\x00\x00'
             # meta - owner: cpu, cpu readable
             newkey += b'\x04\x00\x05\x80'
-            data += newkey
+            data[252:296] = newkey
+            option |= OPT_OTPKEY1
 
         elif key == 'huk2':
             newkey = bytes.fromhex(d['huk2']['key'])
@@ -326,7 +378,8 @@ def conv_otp(opt_file_name) -> (bytearray, int):
             newkey += b'\x02\x00\x00\x00'
             # meta - owner: cpu, cpu readable
             newkey += b'\x04\x00\x05\x80'
-            data += newkey
+            data[296:340] = newkey
+            option |= OPT_OTPKEY2
 
         elif key == 'key3':
             newkey = bytes.fromhex(d['key3']['key'])
@@ -351,8 +404,9 @@ def conv_otp(opt_file_name) -> (bytearray, int):
                 newkey += b'\x00\x06\x04\x80'
             elif d['key3']['meta'] == 'eccp256-cpu-readable':
                 newkey += b'\x04\x06\x04\x80'
+            data[340:384] = newkey
+            option |= OPT_OTPKEY3
 
-            data += newkey
         elif key == 'key4':
             newkey = bytes.fromhex(d['key4']['key'])
             if len(newkey) != 32:
@@ -376,8 +430,9 @@ def conv_otp(opt_file_name) -> (bytearray, int):
                 newkey += b'\x00\x06\x04\x80'
             elif d['key4']['meta'] == 'eccp256-cpu-readable':
                 newkey += b'\x04\x06\x04\x80'
+            data[384:428] = newkey
+            option |= OPT_OTPKEY4
 
-            data += newkey
         elif key == 'key5':
             newkey = bytes.fromhex(d['key5']['key'])
             if len(newkey) != 32:
@@ -401,35 +456,46 @@ def conv_otp(opt_file_name) -> (bytearray, int):
                 newkey += b'\x00\x06\x04\x80'
             elif d['key5']['meta'] == 'eccp256-cpu-readable':
                 newkey += b'\x04\x06\x04\x80'
+            data[428:472] = newkey
+            option |= OPT_OTPKEY5
 
-            data += newkey
         elif key == 'publicx':
             newkey = bytes.fromhex(d['publicx'])
             if len(newkey) != 32:
                 print("IBR publicx is 256-bit")
                 sys.exit(2)
-            data += bytes.fromhex(d['publicx'])
-            data += b'\x00\x01\x00\x00'    # 256 bits
-            data += b'\x06\x00\x00\x00'
-            data += b'\x01\x06\x04\x80'
+            newkey += b'\x00' * (32 - len(newkey))
+            newkey += b'\x00\x01\x00\x00'    # 256 bits
+            newkey += b'\x06\x00\x00\x00'
+            newkey += b'\x01\x06\x04\x80'
+            data[472:516] = newkey
+            option |= OPT_OTPKEY6
+
         elif key == 'publicy':
             newkey = bytes.fromhex(d['publicy'])
             if len(newkey) != 32:
                 print("IBR publicy is 256-bit")
                 sys.exit(2)
-            data += bytes.fromhex(d['publicy'])
-            data += b'\x00\x01\x00\x00'    # 256 bits
-            data += b'\x07\x00\x00\x00'
-            data += b'\x01\x06\x04\x80'
+            newkey += b'\x00' * (32 - len(newkey))
+            newkey += b'\x00\x01\x00\x00'    # 256 bits
+            newkey += b'\x07\x00\x00\x00'
+            newkey += b'\x01\x06\x04\x80'
+            data[516:560] = newkey
+            option |= OPT_OTPKEY7
+
         elif key == 'aeskey':
             newkey = bytes.fromhex(d['aeskey'])
             if len(newkey) != 32:
                 print("IBR aeskey is 256-bit")
                 sys.exit(2)
-            data += bytes.fromhex(d['aeskey'])
-            data += b'\x00\x01\x00\x00'    # 256 bits
-            data += b'\x08\x00\x00\x00'
-            data += b'\x01\x06\x00\x80'
+            newkey += b'\x00' * (32 - len(newkey))
+            newkey += b'\x00\x01\x00\x00'    # 256 bits
+            newkey += b'\x08\x00\x00\x00'
+            newkey += b'\x01\x06\x00\x80'
+            data[560:604] = newkey
+            option |= OPT_OTPKEY8
+
+        data[604:608] = option.to_bytes(4, byteorder='little')
 
     try:
         with open("otp_data.bin", "wb") as out_file:
@@ -438,8 +504,6 @@ def conv_otp(opt_file_name) -> (bytearray, int):
         print(f"Open otp_data.bin failed")
         sys.exit(err)
 
-    if len(data) > 208:
-        option |= OPT_OTPKEY
     return data, option
 
 
@@ -470,7 +534,13 @@ def __img_erase(dev, media, start, length, option) -> int:
     if int.from_bytes(ack, byteorder="little") != ACK:
         print("Receive ACK error")
         return -1
-    bar = tqdm(total=100, position=dev.get_id(), ascii=True, bar_format='{l_bar}{bar:10}{bar:-10b}')
+        
+    dev_num = bus_address(dev.get_bus(),dev.get_address())
+    if  dev_num == -1:
+        reset_bus_address(dev.get_bus(),dev.get_address())
+        dev_num = 0
+        
+    bar = tqdm(total=100, position=dev_num, ascii=True, bar_format='{l_bar}{bar:10}{bar:-10b}')
     previous_progress = 0
     while True:
         # xusb ack with total erase progress.
@@ -731,8 +801,14 @@ def __pack_program(dev, media, pack_image, option) -> int:
         if int.from_bytes(ack, byteorder="little") != ACK:
             print("Receive ACK error")
             return -1
-        text = f"Programming {i+1}/{image_cnt}"
-        bar = tqdm(total=img_length, position=dev.get_id(), ascii=True, desc=text, bar_format='{l_bar}{bar:10}{bar:-10b}')
+            
+        dev_num = bus_address(dev.get_bus(),dev.get_address())
+        if dev_num == -1:
+            reset_bus_address(dev.get_bus(),dev.get_address())
+            dev_num = 0
+            
+        text = f"device {dev_num} Programming {i+1}/{image_cnt}"
+        bar = tqdm(total=img_length, position=dev_num, ascii=True, desc=text, bar_format='{l_bar}{bar:10}{bar:-10b}')
         for offset in range(0, img_length, TRANSFER_SIZE):
             xfer_size = TRANSFER_SIZE if offset + TRANSFER_SIZE < img_length else img_length - offset
             dev.write(pack_image.img_content(i, offset, xfer_size))
@@ -760,8 +836,14 @@ def __pack_program(dev, media, pack_image, option) -> int:
                 print("Receive ACK error")
                 return -1
             remain = img_length
-            text = f"Verifying {i}/{image_cnt}"
-            bar = tqdm(total=img_length, position=dev.get_id(), ascii=True, desc=text, bar_format='{l_bar}{bar:10}{bar:-10b}')
+            
+            dev_num = bus_address(dev.get_bus(),dev.get_address())
+            if dev_num == -1:
+                reset_bus_address(dev.get_bus(),dev.get_address())
+                dev_num = 0
+                
+            text = f"device {dev_num} Verifying {i}/{image_cnt}"
+            bar = tqdm(total=img_length, position=dev_num, ascii=True, desc=text, bar_format='{l_bar}{bar:10}{bar:-10b}')
             while remain > 0:
                 ack = dev.read(4)
                 # Get the transfer length of next read
@@ -847,9 +929,14 @@ def __img_program(dev, media, start, img_data, option) -> int:
         print("Receive ACK error")
         return -1
 
+    dev_num = bus_address(dev.get_bus(),dev.get_address())
+    if  dev_num == -1:
+        reset_bus_address(dev.get_bus(),dev.get_address())
+        dev_num = 0
+
     # Set ascii=True is for Windows cmd terminal, position > 0 doesn't work as expected in cmd though...
-    text = f"Programming {dev.get_id()}"
-    bar = tqdm(total=img_length, position=dev.get_id(), ascii=True, desc=text, bar_format='{l_bar}{bar:10}{bar:-10b}')
+    text = f"device {dev_num} Programming"
+    bar = tqdm(total=img_length, position=dev.dev_num, ascii=True, desc=text, bar_format='{l_bar}{bar:10}{bar:-10b}')
     for offset in range(0, img_length, TRANSFER_SIZE):
         xfer_size = TRANSFER_SIZE if offset + TRANSFER_SIZE < img_length else img_length - offset
         dev.write(img_data[offset: offset + xfer_size])
@@ -874,8 +961,14 @@ def __img_program(dev, media, start, img_data, option) -> int:
             return -1
 
         remain = img_length
-        text = f"Verifying {dev.get_id()}"
-        bar = tqdm(total=img_length, position=dev.get_id(), ascii=True, desc=text, bar_format='{l_bar}{bar:10}{bar:-10b}')
+        
+        dev_num = bus_address(dev.get_bus(),dev.get_address())
+        if dev_num == -1:
+            reset_bus_address(dev.get_bus(),dev.get_address())
+            dev_num = 0
+                
+        text = f"device {dev_num} Verifying"
+        bar = tqdm(total=img_length, position=dev_num, ascii=True, desc=text, bar_format='{l_bar}{bar:10}{bar:-10b}')
         while remain > 0:
             ack = dev.read(4)
             # Get the transfer length of next read
@@ -2020,6 +2113,9 @@ def do_otp_convert(cfg_file, option=OPT_NONE) -> None:
                 if sub_key == 'secboot':
                     if d['boot_cfg']['secboot'] == 'disable':
                         cfg_val |= 0x5A000000
+                if sub_key == 'lock':
+                    if d['boot_cfg']['lock'] == 'enable':
+                        option |= OPT_OTPBLK1_LOCK
             data[0:4] = cfg_val.to_bytes(4, byteorder='little')
             option |= OPT_OTPBLK1
         elif key == 'dpm_plm':
@@ -2036,22 +2132,37 @@ def do_otp_convert(cfg_file, option=OPT_NONE) -> None:
                         data[8:12] = plm_val.to_bytes(4, byteorder='little')
             option |= OPT_OTPBLK2
         elif key == 'mac0':
-            if len(bytes.fromhex(d['mac0'])) != 6:
-                print("mac0 is 6 bytes, please check the size")
-                sys.exit(2)
-            data[12:18] = bytes.fromhex(d['mac0'])
+            for sub_key in d['mac0'].keys():
+                if sub_key == 'mac':
+                    if len(bytes.fromhex(d['mac0']['mac'])) != 6:
+                        print("mac0 is 6 bytes, please check the size")
+                        sys.exit(2)
+                    data[12:18] = bytes.fromhex(d['mac0']['mac'])
+                if sub_key == 'lock':
+                    if d['mac0']['lock'] == 'enable':
+                        option |= OPT_OTPBLK3_LOCK
             option |= OPT_OTPBLK3
         elif key == 'mac1':
-            if len(bytes.fromhex(d['mac1'])) != 6:
-                print("mac1 is 6 bytes, please check the size")
-                sys.exit(2)
-            data[20:26] = bytes.fromhex(d['mac1'])
+            for sub_key in d['mac1'].keys():
+                if sub_key == 'mac':
+                    if len(bytes.fromhex(d['mac1']['mac'])) != 6:
+                        print("mac1 is 6 bytes, please check the size")
+                        sys.exit(2)
+                    data[20:26] = bytes.fromhex(d['mac1']['mac'])
+                if sub_key == 'lock':
+                    if d['mac1']['lock'] == 'enable':
+                        option |= OPT_OTPBLK4_LOCK
             option |= OPT_OTPBLK4
         elif key == 'dplypwd':
-            if len(bytes.fromhex(d['dplypwd'])) != 4:
-                print("dplypwd is 4 bytes, please check the size")
-                sys.exit(2)
-            data[28:32] = bytes.fromhex(d['dplypwd'])
+            for sub_key in d['dplypwd'].keys():
+                if sub_key == 'pwd':
+                    if len(bytes.fromhex(d['dplypwd']['pwd'])) != 4:
+                        print("dplypwd is 4 bytes, please check the size")
+                        sys.exit(2)
+                    data[28:32] = bytes.fromhex(d['dplypwd']['pwd'])
+                if sub_key == 'lock':
+                    if d['dplypwd']['lock'] == 'enable':
+                        option |= OPT_OTPBLK5_LOCK
             option |= OPT_OTPBLK5
         elif key == 'sec':
             if len(bytes.fromhex(d['sec'])) > 88:

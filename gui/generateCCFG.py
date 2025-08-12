@@ -214,8 +214,6 @@ class CCFG_MainPage(QWidget):
         
         self.setLayout(self.mainLayout)
         
-        #self.showExport("C:\\Users\\PWHSU0\\Desktop\\MA35D1\\header.json")
-        
     def hideExport(self):
         self.gen_Button.setHidden(True)
         

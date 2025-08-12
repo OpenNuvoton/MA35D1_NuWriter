@@ -33,6 +33,7 @@ OPT_EJECT = 6       # For msc
 
 OPT_NOCRC = 11      # For write
 
+CUSTOM_CRC = False
 
 class MediaPage(QWidget):
 
@@ -136,6 +137,8 @@ class MediaPage(QWidget):
             imgTypeLayout.addWidget(self.radioPack)
             imgTypeLayout.addStretch()
             imgTypeLayout.addWidget(self.crcDisabled)
+            if (CUSTOM_CRC):
+                self.crcDisabled.setVisible(False) 
 
             writeLayout.addRow(QLabel("Image type"), imgTypeLayout)
 
