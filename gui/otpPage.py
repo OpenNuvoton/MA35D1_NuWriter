@@ -43,6 +43,8 @@ OPT_OTPKEY6 = 0x400000
 OPT_OTPKEY7 = 0x800000
 OPT_OTPKEY8 = 0x1000000
 
+OPT_OTPENC = 0x8000000
+
 class KeySizeMeta(QWidget):
 
     def __init__(self, title="", parent=None):
@@ -71,6 +73,44 @@ class KeySizeMeta(QWidget):
         
         self.keyEdit.textChanged.connect(self.keyEdit_changed)
         self.genButton.clicked.connect(self.gen_key)      
+
+        mainLayout.setContentsMargins(0, 0, 0, 0)
+
+        self.setLayout(mainLayout)
+    
+    def keyEdit_changed(self):
+        reg_key64 = QRegExpValidator(QRegExp("[0-9A-Fa-f]{64}"))
+        
+        if reg_key64.validate(self.keyEdit.text(),0)[0] == QValidator.Acceptable:
+            self.keyEdit.setStyleSheet("border: 2px solid limegreen")
+        elif self.keyEdit.text()== "":
+            self.keyEdit.setStyleSheet("border: 1px solid black")
+        else:
+            self.keyEdit.setStyleSheet("border: 2px solid red")
+    
+    def gen_key(self):
+        key = ''.join(['%x' % randrange(16) for _ in range(0, 64)])
+        self.keyEdit.setText(key)
+        
+class KeySizeMeta64(QWidget):
+
+    def __init__(self, title="", parent=None):
+        super(KeySizeMeta64, self).__init__(parent)
+
+        mainLayout = QVBoxLayout()
+        self.keyEdit = QLineEdit()
+        self.genButton = QPushButton('Generate')
+
+        _HLayout1 = QHBoxLayout()
+        _HLayout1.addWidget(QLabel(f"{title} Key:   0x"))
+        _HLayout1.addWidget(self.keyEdit)
+        _HLayout1.addWidget(self.genButton)
+
+        #self.meta_change()
+        mainLayout.addLayout(_HLayout1) 
+        
+        self.keyEdit.textChanged.connect(self.keyEdit_changed)
+        self.genButton.clicked.connect(self.gen_key)
 
         mainLayout.setContentsMargins(0, 0, 0, 0)
 
@@ -290,7 +330,16 @@ class PovPage(QWidget):
         '''
         LayoutValue.addStretch()
         _GroupValue.setLayout(LayoutValue)
-
+        
+        _GroupBootDelay = QGroupBox("Boot Delay")
+        LayoutBootDelay = QHBoxLayout()
+        self._bootdelay = QSpinBox()
+        self._bootdelay.setRange(0, 15)
+        LayoutBootDelay.addWidget(QLabel("Boot Delay:           "))
+        LayoutBootDelay.addWidget(self._bootdelay)
+        LayoutBootDelay.addStretch()
+        _GroupBootDelay.setLayout(LayoutBootDelay)
+        
         # signal
         self._bit0_0.clicked.connect(lambda: ( 
             self.updateBits(0, 0),
@@ -343,7 +392,7 @@ class PovPage(QWidget):
         mainLayout.addWidget(self._GroupBit12)
         mainLayout.addWidget(self._GroupBit14)
         mainLayout.addWidget(_GroupBits)
-        mainLayout.addStretch()
+        mainLayout.addWidget(_GroupBootDelay)
         mainLayout.addWidget(_GroupValue)
 
         self.setLayout(mainLayout)
@@ -652,8 +701,8 @@ class KeyPage(QWidget):
         self.addHardwareUniqueKey()
         self.addKeyStorage()
         self.addAesKey()
-        self.mainLayout.addStretch()
-
+        #self.mainLayout.addStretch()
+        self.addOTPKey()
         self.setLayout(self.mainLayout)
 
     def addHardwareUniqueKey(self):
@@ -808,7 +857,8 @@ class KeyPage(QWidget):
         self.publicyEdit.textChanged.connect(self.Edit_changed)
         self.aeskeyEdit.textChanged.connect(self.Edit_changed)
         
-        self.privateEdit_btn.clicked.connect(self.gen_key)
+        #self.privateEdit_btn.clicked.connect(self.gen_key)
+        self.privateEdit_btn.clicked.connect(lambda: (self.gen_key(self.privateEdit, self.publicxEdit, self.publicyEdit)))
         self.aeskeyEdit_btn.clicked.connect(self.gen_key_a) 
         
         _Layout.addRow(self.privateEdit_sub)
@@ -816,25 +866,39 @@ class KeyPage(QWidget):
         _Layout.addRow(self.publicyEdit_sub)
         _Layout.addRow(self.aeskeyEdit_sub)
         self.mainLayout.addWidget(self.aes_Group)
+        
+    def addOTPKey(self):
+        reg_key64 = QRegExpValidator(QRegExp("[0-9A-Fa-f]{64}"))
+        self.otpkey_Group = QGroupBox("OTP encrypt private key")
+        _Layout = QVBoxLayout()
+        self.otpkey_Group.setLayout(_Layout)
+        self.otpOption = KeySizeMeta64("OTP")
+        _Layout.addWidget(self.otpOption)
+        self.mainLayout.addWidget(self.otpkey_Group)
 
-    def gen_key(self):
-
+    def gen_key(self, key_edit, x_edit, y_edit):
+    #def gen_key(self):
         reg_key64 = QRegExpValidator(QRegExp("[0-9A-Fa-f]{64}"))
     
-        if reg_key64.validate(self.privateEdit.text(),0)[0] == QValidator.Acceptable:
-            key = self.privateEdit.text()
-            self.gen_key_pub(key)
+        #if reg_key64.validate(self.privateEdit.text(),0)[0] == QValidator.Acceptable:
+        if reg_key64.validate(key_edit.text(),0)[0] == QValidator.Acceptable:
+            #key = self.privateEdit.text()
+            key = key_edit.text()
+            #self.gen_key_pub(key)
+            self.gen_key_pub(key, x_edit, y_edit)
         else :
             key = ''.join(['%x' % randrange(16) for _ in range(0, 64)])
-            self.privateEdit.setText(key) 
-            self.gen_key_pub(key)
+            #self.privateEdit.setText(key) 
+            key_edit.setText(key)
+            #self.gen_key_pub(key)
+            self.gen_key_pub(key, x_edit, y_edit)
         
     def gen_key_a(self):
         key = ''.join(['%x' % randrange(16) for _ in range(0, 64)])
         self.aeskeyEdit.setText(key)
         
-    def gen_key_pub(self, key):
-    
+    #def gen_key_pub(self, key):
+    def gen_key_pub(self, key, x_edit, y_edit):
         sk = SigningKey.from_string(bytes.fromhex(key),
                                                 curve=NIST256p,
                                                 hashfunc=sha256)
@@ -843,9 +907,11 @@ class KeyPage(QWidget):
         key_y = hex(vk.pubkey.point.y())   
         key_x = key_x.replace('0x', '')
         key_y = key_y.replace('0x', '')
-        self.publicxEdit.setText(key_x.zfill(64))
-        self.publicyEdit.setText(key_y.zfill(64))
-    
+        #self.publicxEdit.setText(key_x.zfill(64))
+        x_edit.setText(key_x.zfill(64))
+        #self.publicyEdit.setText(key_y.zfill(64))
+        y_edit.setText(key_y.zfill(64))
+        
     def Edit_changed(self):
         reg_key64 = QRegExpValidator(QRegExp("[0-9A-Fa-f]{64}"))
         stack = [self.privateEdit, self.publicxEdit, self.publicyEdit, self.aeskeyEdit]
@@ -884,21 +950,7 @@ class OtpPage(QWidget):
         self.setLayout(self.mainLayout)
         self.setWindowTitle("MA35 Series OTP Settings")
         
-        #self.read_back_otp('C:/Users/pwhsu0/Desktop/MA35D1/otp_data.bin')
-     
-    def read_back_otp(self, text):
-        self.otp_file_names = text
-        self._Group.setVisible(False)
-        try:
-            with open(self.otp_file_names, 'rb') as bin_file:
-                d = bin_file.read()
-        except (IOError, OSError) as err:
-            print(f"Open {self.otp_file_names} failed") 
-            return 
-       
-        if len(d) < 608:
-            d += b'\x00' * (608 - len(d))
-       
+    def bin_to_otp(self, d):
         option = int.from_bytes(d[604:608], byteorder='little')
         block_1 = int.from_bytes(d[0:4], byteorder='little')
         pos_pin = True
@@ -979,7 +1031,9 @@ class OtpPage(QWidget):
         else :
             self.povPage._bit14_00.setChecked(True)
             self.povPage.updateBits(14, 0, 2)
-            
+        
+        self.povPage._bootdelay.setValue((block_1 & 0xF0000) >> 16)
+        
         if block_1 & 0x5A000000:
             self.povPage._bits_1.setChecked(True)
         else:
@@ -989,6 +1043,88 @@ class OtpPage(QWidget):
             self.povPage.read_lock_Pov.blockSignals(True)
             self.povPage.read_lock_Pov.setChecked(True)
             self.povPage.read_lock_Pov.blockSignals(False)
+        
+        self.povPage.enable_pos(pos_pin)
+        
+        #dpm_plm hide right now 
+        #block_2_d = int.from_bytes(d[4:8], byteorder='little')
+        block_2_p = int.from_bytes(d[8:12], byteorder='little')
+        
+        #self.dpm_plmPage.setPlmStage(i)
+        
+        for i in range(0, 3):
+            if block_2_p & (0x1 << i):
+                self.dpm_plmPage.plm_btn[i].setChecked(True)
+                self.dpm_plmPage.setPlmStage(i)
+        
+        block_3 = d[12:18].hex()
+        if block_3 != '' and int(block_3,16) and (option & OPT_OTPBLK3 != 0):
+            self.miscPage.mac0LineEdit.setText(block_3)
+        if option & OPT_OTPBLK3_LOCK != 0:
+            self.miscPage.read_lock_mac0.blockSignals(True)
+            self.miscPage.read_lock_mac0.setChecked(True)
+            self.miscPage.read_lock_mac0.blockSignals(False)
+
+        block_4 = d[20:26].hex()
+        if block_4 != '' and int(block_4,16) and (option & OPT_OTPBLK4 != 0):
+            self.miscPage.mac1LineEdit.setText(block_4)
+        if option & OPT_OTPBLK4_LOCK != 0:
+            self.miscPage.read_lock_mac1.blockSignals(True)
+            self.miscPage.read_lock_mac1.setChecked(True)
+            self.miscPage.read_lock_mac1.blockSignals(False)
+
+        block_5 = d[28:32].hex()
+        if block_5 != '' and int(block_5,16) and (option & OPT_OTPBLK5 != 0):
+            self.dpm_plmPage.dplypwdEdit.setText(block_5)
+        if option & OPT_OTPBLK5_LOCK != 0:
+            self.dpm_plmPage.read_lock_Plm.blockSignals(True)
+            self.dpm_plmPage.read_lock_Plm.setChecked(True)
+            self.dpm_plmPage.read_lock_Plm.blockSignals(False)
+
+        block_6 = d[32:120].hex()
+        if block_6 != '' and int(block_6,16) and (option & OPT_OTPBLK6 != 0):
+            self.miscPage.secureText.setPlainText(block_6)
+
+        block_7 = d[120:208].hex()
+        if block_7 != '' and int(block_7,16) and (option & OPT_OTPBLK7 != 0):
+            self.miscPage.nonSecureText.setPlainText(block_7)
+        
+        key_0 = d[208:224].hex()
+        if key_0 != '' and int(key_0,16) and (option & OPT_OTPKEY0 != 0):
+            self.keyPage.huk0Option.keyEdit.setText(key_0)
+        key_1 = d[252:268].hex()
+        if key_1 != '' and int(key_1,16) and (option & OPT_OTPKEY1 != 0):
+            self.keyPage.huk1Option.keyEdit.setText(key_1)
+        key_2 = d[296:312].hex()
+        if key_2 != '' and int(key_2,16) and (option & OPT_OTPKEY2 != 0):
+            self.keyPage.huk2Option.keyEdit.setText(key_2)
+        key_3 = d[340:372].hex()
+        if key_3 != '' and int(key_3,16) and (option & OPT_OTPKEY3 != 0):
+            self.keyPage.keyStorage3Option.keyEdit.setText(key_3)
+        key_4 = d[384:416].hex()
+        if key_4 != '' and int(key_4,16) and (option & OPT_OTPKEY4 != 0):   
+            self.keyPage.keyStorage4Option.keyEdit.setText(key_4)
+        key_5 = d[428:460].hex()
+        if key_5 != '' and int(key_5,16) and (option & OPT_OTPKEY5 != 0):
+            self.keyPage.keyStorage5Option.keyEdit.setText(key_5)
+    
+    def read_back_otp(self, text):
+        self.otp_file_names = text
+        self._Group.setVisible(False)
+        try:
+            with open(self.otp_file_names, 'rb') as bin_file:
+                d = bin_file.read()
+        except (IOError, OSError) as err:
+            print(f"Open {self.otp_file_names} failed") 
+            return 1
+       
+        if len(d) < 672:
+            d += b'\x00' * (672 - len(d))
+            
+        if int.from_bytes(d[0:4], byteorder='little') > 0xF:
+            return 2
+       
+        self.bin_to_otp(d)
         
         style_sheet = "color: black; background-color: white"
         
@@ -1050,76 +1186,17 @@ class OtpPage(QWidget):
         self.povPage._bits_0.setStyleSheet(style_sheet) 
         self.povPage._bits_1.setStyleSheet(style_sheet)
         
-        self.povPage.enable_pos(pos_pin)
-        
-        #dpm_plm hide right now 
-        #block_2_d = int.from_bytes(d[4:8], byteorder='little')
-        block_2_p = int.from_bytes(d[8:12], byteorder='little')
-        
-        #self.dpm_plmPage.setPlmStage(i)
-        
-        for i in range(0, 3):
-            if block_2_p & (0x1 << i):
-                self.dpm_plmPage.plm_btn[i].setChecked(True)
-                self.dpm_plmPage.setPlmStage(i)
-        
-        block_3 = d[12:18].hex()
-        if int(block_3,16) and (option & OPT_OTPBLK3 != 0):
-            self.miscPage.mac0LineEdit.setText(block_3)
-        if option & OPT_OTPBLK3_LOCK != 0:
-            self.miscPage.read_lock_mac0.blockSignals(True)
-            self.miscPage.read_lock_mac0.setChecked(True)
-            self.miscPage.read_lock_mac0.blockSignals(False)
         self.miscPage.mac0LineEdit.setEnabled(False)
         self.miscPage.mac0LineEdit.setStyleSheet(style_sheet)
-        block_4 = d[20:26].hex()
-        if int(block_4,16) and (option & OPT_OTPBLK4 != 0):
-            self.miscPage.mac1LineEdit.setText(block_4)
-        if option & OPT_OTPBLK4_LOCK != 0:
-            self.miscPage.read_lock_mac1.blockSignals(True)
-            self.miscPage.read_lock_mac1.setChecked(True)
-            self.miscPage.read_lock_mac1.blockSignals(False)
         self.miscPage.mac1LineEdit.setEnabled(False)
         self.miscPage.mac1LineEdit.setStyleSheet(style_sheet)
-        block_5 = d[28:32].hex()
-        if int(block_5,16) and (option & OPT_OTPBLK5 != 0):
-            self.dpm_plmPage.dplypwdEdit.setText(block_5)
-        if option & OPT_OTPBLK5_LOCK != 0:
-            self.dpm_plmPage.read_lock_Plm.blockSignals(True)
-            self.dpm_plmPage.read_lock_Plm.setChecked(True)
-            self.dpm_plmPage.read_lock_Plm.blockSignals(False)
         self.dpm_plmPage.dplypwdEdit.setEnabled(False)
         self.dpm_plmPage.dplypwdEdit.setStyleSheet(style_sheet)
-        block_6 = d[32:120].hex()
-        if int(block_6,16) and (option & OPT_OTPBLK6 != 0):
-            self.miscPage.secureText.setPlainText(block_6)
         self.miscPage.secureText.setEnabled(False)
         self.miscPage.secureText.setStyleSheet(style_sheet)
-        block_7 = d[120:208].hex()
-        if int(block_7,16) and (option & OPT_OTPBLK7 != 0):
-            self.miscPage.nonSecureText.setPlainText(block_7)
         self.miscPage.nonSecureText.setEnabled(False)
         self.miscPage.nonSecureText.setStyleSheet(style_sheet)
         
-        key_0 = d[208:224].hex()
-        if int(key_0,16) and (option & OPT_OTPKEY0 != 0):
-            self.keyPage.huk0Option.keyEdit.setText(key_0)
-        key_1 = d[252:268].hex()
-        if int(key_1,16) and (option & OPT_OTPKEY1 != 0):
-            self.keyPage.huk1Option.keyEdit.setText(key_1)
-        key_2 = d[296:312].hex()
-        if int(key_2,16) and (option & OPT_OTPKEY2 != 0):
-            self.keyPage.huk2Option.keyEdit.setText(key_2)
-        key_3 = d[340:372].hex()
-        if int(key_3,16) and (option & OPT_OTPKEY3 != 0):
-            self.keyPage.keyStorage3Option.keyEdit.setText(key_3)
-        key_4 = d[384:416].hex()
-        if int(key_4,16) and (option & OPT_OTPKEY4 != 0):   
-            self.keyPage.keyStorage4Option.keyEdit.setText(key_4)
-        key_5 = d[428:460].hex()
-        if int(key_5,16) and (option & OPT_OTPKEY5 != 0):
-            self.keyPage.keyStorage5Option.keyEdit.setText(key_5)
-                    
         self.keyPage.huk0Option.keyEdit.setEnabled(False)
         self.keyPage.huk0Option.keyEdit.setStyleSheet(style_sheet)
         self.keyPage.huk0Option.genButton.setVisible(False)
@@ -1145,6 +1222,9 @@ class OtpPage(QWidget):
         self.keyPage.keyStorage5Option.metaEdit.setStyleSheet(style_sheet)
         self.keyPage.keyStorage5Option.genButton.setVisible(False)
         self.keyPage.aes_Group.setVisible(False)
+        self.keyPage.otpkey_Group.setVisible(False)
+        
+        return 0
         '''
         self.keyPage.privateEdit.setEnabled(False)
         self.keyPage.privateEdit.setStyleSheet(style_sheet)
@@ -1160,7 +1240,32 @@ class OtpPage(QWidget):
 
     def set_otp_name(self, text):
         self.otp_file_names = text
-        
+        try:
+            with open(self.otp_file_names, "rb") as f:
+                raw_data = f.read()
+        except (IOError, OSError) as err:
+            print(f"Open {self.otp_file_names} failed")
+            return
+            
+        is_utf8 = True
+        try:
+            text = raw_data.decode('utf-8')
+        except UnicodeDecodeError:
+            is_utf8 = False
+
+        if is_utf8 == False:
+            #print(f"{self.otp_file_names} is Binary")
+            d = bytearray(raw_data)
+            self.bin_to_otp(d)
+            return
+        else:
+            try:
+                d = json.loads(text)
+                #print(f"{self.otp_file_names} is JSON")
+            except json.JSONDecodeError:
+                #print(f"{self.otp_file_names} is UTF-8 text")
+                return
+        '''
         try:
             with open(self.otp_file_names, 'r') as json_file:
                 try:
@@ -1171,6 +1276,7 @@ class OtpPage(QWidget):
         except (IOError, OSError) as err:
             print(f"Open {self.otp_file_names} failed")
             return
+        '''
                       
         for key in d.keys():
             #PovPage fill 
@@ -1284,7 +1390,11 @@ class OtpPage(QWidget):
                 if d['boot_cfg'].get('secboot') == "disable":
                     self.povPage._bits_1.setChecked(True)
                     
-                if d['boot_cfg']['lock'] == 'enable':
+                if d['boot_cfg'].get('bootdly'):
+                    #self.povPage._bits_1.setChecked(True)
+                    self.povPage._bootdelay.setValue(int(d['boot_cfg']['bootdly']))
+                    
+                if d['boot_cfg'].get('lock') == 'enable':
                     self.povPage.read_lock_Pov.setChecked(True)
                     
                 self.povPage.enable_pos(pos_pin)
@@ -1348,6 +1458,10 @@ class OtpPage(QWidget):
                 self.keyPage.publicyEdit.setText(d['publicy'])
             elif key == 'aeskey':            
                 self.keyPage.aeskeyEdit.setText(d['aeskey'])
+            elif key == 'otpencrypt':
+                if d["otpencrypt"].get("encrypt") == "yes":
+                    if d["otpencrypt"].get("key"):
+                        self.keyPage.otpOption.keyEdit.setText(d["otpencrypt"].get("key"))
                 
     def addExportOption(self):
         self._Group = QGroupBox("Export OTP settings")
@@ -1362,12 +1476,13 @@ class OtpPage(QWidget):
         self.exportSecure = QCheckBox("Secure Region")
         self.exportNonSecure = QCheckBox("Non-secure Region")
         self.exportKey = QCheckBox("Hardware Unique Key, Key Storage and IBR Key")
+        self.exportOTPKey = QCheckBox("OTP Encrypt Key")
         self.void = QCheckBox("Void")
         self.void.setVisible(False)
 
         self.checkList = [
             self.exportPov,  self.exportDpmPlm, self.exportKey,
-            self.exportMAC0, self.exportMAC1,
+            self.exportMAC0, self.exportMAC1, self.exportOTPKey,
             self.exportDplypwd, self.exportSecure, self.exportNonSecure
         ]
 
@@ -1395,10 +1510,14 @@ class OtpPage(QWidget):
         _H3Layout = QHBoxLayout()
         _H3Layout.addWidget(self.exportButton)
         _H3Layout.addWidget(self.exportFileEdit)
+        
+        _H4Layout = QHBoxLayout()
+        _H4Layout.addWidget(self.exportKey)
+        _H4Layout.addWidget(self.exportOTPKey)
 
         _Layout.addLayout(_H1Layout)
         _Layout.addLayout(_H2Layout)
-        _Layout.addWidget(self.exportKey)
+        _Layout.addLayout(_H4Layout)
         _Layout.addLayout(_H3Layout)
         self.mainLayout.addWidget(self._Group)
 
@@ -1513,6 +1632,9 @@ class OtpPage(QWidget):
             else:
                 boot_cfg["secboot"] = "disable"
                 self.secure_dis = True
+                
+            delay = self.povPage._bootdelay.value()
+            boot_cfg["bootdly"] = delay
 
             if self.povPage.read_lock_Pov.isChecked():
                 boot_cfg["lock"] = "enable"
@@ -1658,41 +1780,55 @@ class OtpPage(QWidget):
 
     def _exportKey(self):
         if self.exportKey.isChecked():
+        
+            options = [
+                self.keyPage.huk0Option,
+                self.keyPage.huk1Option,
+                self.keyPage.huk2Option,
+                self.keyPage.keyStorage3Option,
+                self.keyPage.keyStorage4Option,
+                self.keyPage.keyStorage5Option,
+            ]
 
-                options = [
-                    self.keyPage.huk0Option,
-                    self.keyPage.huk1Option,
-                    self.keyPage.huk2Option,
-                    self.keyPage.keyStorage3Option,
-                    self.keyPage.keyStorage4Option,
-                    self.keyPage.keyStorage5Option,
-                ]
+            for i, opt in enumerate(options):
+                if i < 3:
+                    key = f"huk{i}"
+                else:
+                    key = f"key{i}"
 
-                for i, opt in enumerate(options):
-                    if i < 3:
-                        key = f"huk{i}"
-                    else:
-                        key = f"key{i}"
+                _dict = {}
 
-                    _dict = {}
+                _dict["key"] = opt.keyEdit.text()
+                
+                if i > 2:
+                    _dict["meta"] = opt.metaEdit.currentText()
 
-                    _dict["key"] = opt.keyEdit.text()
+                if (i < 3 and opt.keyEdit.text()!=""):
+                    self.otp_dict[key] = _dict
                     
-                    if i > 2:
-                        _dict["meta"] = opt.metaEdit.currentText()
+                elif (i > 2 and opt.keyEdit.text()!="" and opt.metaEdit.currentText()!=""):
+                    self.otp_dict[key] = _dict
 
-                    if (i < 3 and opt.keyEdit.text()!=""):
-                        self.otp_dict[key] = _dict
-                        
-                    elif (i > 2 and opt.keyEdit.text()!="" and opt.metaEdit.currentText()!=""):
-                        self.otp_dict[key] = _dict
-
-                if self.keyPage.publicxEdit.text() != "":
-                    self.otp_dict["publicx"] = self.keyPage.publicxEdit.text()
-                if self.keyPage.publicyEdit.text() != "":
-                    self.otp_dict["publicy"] = self.keyPage.publicyEdit.text()
-                if self.keyPage.aeskeyEdit.text() != "":
-                    self.otp_dict["aeskey"] = self.keyPage.aeskeyEdit.text()
+            if self.keyPage.publicxEdit.text() != "":
+                self.otp_dict["publicx"] = self.keyPage.publicxEdit.text()
+            if self.keyPage.publicyEdit.text() != "":
+                self.otp_dict["publicy"] = self.keyPage.publicyEdit.text()
+            if self.keyPage.aeskeyEdit.text() != "":
+                self.otp_dict["aeskey"] = self.keyPage.aeskeyEdit.text()
+                    
+    def _exportOTPKey(self):
+        if self.exportOTPKey.isChecked():
+            otpencrypt = {}
+        
+            if self.keyPage.otpOption.keyEdit.text() != "":
+                otpencrypt["encrypt"] = "yes"
+                otpencrypt["key"] = self.keyPage.otpOption.keyEdit.text()
+                otpencrypt["Px"] = "28a15ee9d111b8f82e94dd5b55e820cb77e3ed86b95aa0165bcef93ff7a6e79a"
+                otpencrypt["Py"] = "fa83470ec4db951db9923e35c920a47c53bc3ddc61692de0355da20e6085fae3"
+            else:
+                otpencrypt["encrypt"] = "no"
+                
+            self.otp_dict["otpencrypt"] = otpencrypt
 
     def _exportJson(self):
 
@@ -1705,6 +1841,7 @@ class OtpPage(QWidget):
         self._exportDplyPwd()
         self._exportSecureNonSecure()
         self._exportKey()
+        self._exportOTPKey()
 
         # print(self.otp_dict)
 

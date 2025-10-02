@@ -184,11 +184,12 @@ class MediaPage(QWidget):
         imgFileLayout.addWidget(self.imgPathLine)
         imgFileLayout.addWidget(imgBrowseButton)
 
-        writeLayout.addRow(QLabel("OTP json"), imgFileLayout)
+        writeLayout.addRow(QLabel("OTP file"), imgFileLayout)
         
-        otp_genButton = QPushButton('Generate/Read OTP json')
-        writeLayout.addRow(QLabel(" "), otp_genButton)
-        otp_genButton.clicked.connect(self.OTP_generate)        
+        self.otp_genButton = QPushButton('Generate/Read OTP json')
+        writeLayout.addRow(QLabel(" "), self.otp_genButton)
+        self.otp_genButton.clicked.connect(self.OTP_generate)
+        self.imgPathLine.editingFinished.connect(self.OTP_generate_check)
 
         writeGroup.setLayout(writeLayout)
         self.mainLayout.addWidget(writeGroup)
@@ -375,6 +376,13 @@ class MediaPage(QWidget):
     def OTP_generate(self):
         self.signalOtpGen.emit()
         
+    def OTP_generate_check(self):
+        text = self.imgPathLine.text()
+        if text.endswith('bin'):
+            self.otp_genButton.setEnabled(False)
+        else:
+            self.otp_genButton.setEnabled(True)
+        
     def OTP_readback(self):
         self.signalOtpRB.emit()
 
@@ -496,10 +504,11 @@ class MediaPage(QWidget):
     def pathBrowseOTP(self):
         filename = ""
         # Fix for crash in X on Ubuntu 14.04
-        filename, _ = QtWidgets.QFileDialog.getOpenFileName(filter = "json(*.json)")
+        filename, _ = QtWidgets.QFileDialog.getOpenFileName(filter = "json(*.json);;bin(*.bin)")
 
         if filename != "":
             self.imgPathLine.setText(filename)
+            self.OTP_generate_check()
 
     def saveFile(self):
         fileName, _ = QtWidgets.QFileDialog.getSaveFileName(self,

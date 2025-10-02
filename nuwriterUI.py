@@ -33,7 +33,7 @@ from gui.generatePCFG import PCFG_MainPage
 
 from gui.progress import ProgressDialog 
 
-Version = "v1.02"
+Version = "v1.03"
 
 class EmittingStream(QtCore.QObject):
 
@@ -351,8 +351,11 @@ class Ui(QtWidgets.QMainWindow, Ui_MainWindow):
     def OTP_readback(self):
         self.text_browser.clear()
         self.OTP_generate_window = OtpPage() 
-        self.OTP_generate_window.read_back_otp(self.otpPage.fileShow.text())
-        self.OTP_generate_window.show()
+        show_win = self.OTP_generate_window.read_back_otp(self.otpPage.fileShow.text())
+        if show_win == 0:
+            self.OTP_generate_window.show()
+        elif show_win == 2:
+            print('Can not read back encrypt bin file!')
         
     def addMedia(self):
 

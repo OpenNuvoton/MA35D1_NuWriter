@@ -11,6 +11,8 @@ import crcmod
 from Crypto.Cipher import AES
 import hashlib
 import ecdsa
+from ecdsa import NIST256p, ellipticcurve
+from hashlib import sha256
 import binascii
 from datetime import datetime
 import random
@@ -99,6 +101,7 @@ OPT_OTPKEY6 = 0x400000
 OPT_OTPKEY7 = 0x800000
 OPT_OTPKEY8 = 0x1000000
 
+OPT_OTPENC = 0x8000000
 
 # Image type definitions
 IMG_DATA = 0
@@ -203,17 +206,35 @@ def get_plm(plm) -> int:
 
 def conv_otp(opt_file_name) -> (bytearray, int):
     try:
-        with open(opt_file_name, "r") as json_file:
-            try:
-                d = json.load(json_file)
-            except json.decoder.JSONDecodeError as err:
-                print(f"{opt_file_name} parsing error")
-                sys.exit(err)
+        with open(opt_file_name, "rb") as f:
+            raw_data = f.read()
     except (IOError, OSError) as err:
         print(f"Open {opt_file_name} failed")
         sys.exit(err)
+
+    is_utf8 = True
+    try:
+        text = raw_data.decode('utf-8')
+    except UnicodeDecodeError:
+        is_utf8 = False
+
+    if is_utf8 == False:
+        print(f"{opt_file_name} is Binary")
+        data = bytearray(raw_data)
+        option_bytes = data[604:608]
+        option = int.from_bytes(option_bytes, byteorder='little')
+        #print(hex(option))
+        return data, option
+    else:
+        try:
+            d = json.loads(text)
+            print(f"{opt_file_name} is JSON")
+        except json.JSONDecodeError:
+            print(f"{opt_file_name} is UTF-8 text")
+            sys.exit(1)
+
     # Bootcfg, DPM, PLM, and PWD 4 bytes each, MAC addr 8 bytes each, sec/nsec 88 bytes each, 9 keys
-    data = bytearray(608)
+    data = bytearray(672)
 
     option = 0
     for key in d.keys():
@@ -269,6 +290,12 @@ def conv_otp(opt_file_name) -> (bytearray, int):
                 if sub_key == 'secboot':
                     if d['boot_cfg']['secboot'] == 'disable':
                         cfg_val |= 0x5A000000
+                if sub_key == 'bootdly':
+                    dly = int(d['boot_cfg']['bootdly'])
+                    if dly > 15:
+                        print("boot delay is 0~15")
+                        sys.exit(2)
+                    cfg_val |= dly << 16;
                 if sub_key == 'lock':
                     if d['boot_cfg']['lock'] == 'enable':
                         option |= OPT_OTPBLK1_LOCK
@@ -494,6 +521,44 @@ def conv_otp(opt_file_name) -> (bytearray, int):
             newkey += b'\x01\x06\x00\x80'
             data[560:604] = newkey
             option |= OPT_OTPKEY8
+        elif key == 'otpencrypt':
+            if d["otpencrypt"]["encrypt"] == 'yes':
+
+                newkey = bytes.fromhex(d['otpencrypt']['key'])
+                if len(newkey) != 32:
+                    print("encrypt key is 256-bit")
+                    sys.exit(2)
+
+                try:
+                    sk = ecdsa.SigningKey.from_string(bytes.fromhex(d["otpencrypt"]["key"]),
+                                                      curve=ecdsa.NIST256p,
+                                                      hashfunc=hashlib.sha256)
+                except ValueError as err:
+                    sys.exit(err)
+
+                vk = sk.verifying_key
+                x_int = vk.pubkey.point.x()
+                x_hex = format(x_int, 'x').zfill(64)
+                data[608:640] = bytes.fromhex(x_hex)
+                y_int = vk.pubkey.point.y()
+                y_hex = format(y_int, 'x').zfill(64)
+                data[640:672] = bytes.fromhex(y_hex)
+                option |= OPT_OTPENC
+
+                priv_scalar = sk.privkey.secret_multiplier
+                Px = int((d['otpencrypt']['Px']), 16)
+                Py = int((d['otpencrypt']['Py']), 16)
+                public_point = ellipticcurve.Point(NIST256p.curve, Px, Py)
+                shared_point = public_point * priv_scalar
+                #print("share x =", format(shared_point.x(), "064x"))
+                #print("share y =", format(shared_point.y(), "064x"))
+
+                # Use CFB and each image is process independently, so call new() for every image
+                key = shared_point.x().to_bytes(32, 'big')
+                #print(f"AES key = {key.hex()}")
+                aes_enc = AES.new(key, AES.MODE_CFB, b'\x00' * 16, segment_size=128)
+                data_out = aes_enc.encrypt(data[0:604])
+                data[0:604] = data_out
 
         data[604:608] = option.to_bytes(4, byteorder='little')
 
@@ -936,7 +1001,7 @@ def __img_program(dev, media, start, img_data, option) -> int:
 
     # Set ascii=True is for Windows cmd terminal, position > 0 doesn't work as expected in cmd though...
     text = f"device {dev_num} Programming"
-    bar = tqdm(total=img_length, position=dev.dev_num, ascii=True, desc=text, bar_format='{l_bar}{bar:10}{bar:-10b}')
+    bar = tqdm(total=img_length, position=dev_num, ascii=True, desc=text, bar_format='{l_bar}{bar:10}{bar:-10b}')
     for offset in range(0, img_length, TRANSFER_SIZE):
         xfer_size = TRANSFER_SIZE if offset + TRANSFER_SIZE < img_length else img_length - offset
         dev.write(img_data[offset: offset + xfer_size])
@@ -2113,6 +2178,12 @@ def do_otp_convert(cfg_file, option=OPT_NONE) -> None:
                 if sub_key == 'secboot':
                     if d['boot_cfg']['secboot'] == 'disable':
                         cfg_val |= 0x5A000000
+                if sub_key == 'bootdly':
+                    dly = int(d['boot_cfg']['bootdly'])
+                    if dly > 15:
+                        print("boot delay is 0~15")
+                        sys.exit(2)
+                    cfg_val |= dly << 16;
                 if sub_key == 'lock':
                     if d['boot_cfg']['lock'] == 'enable':
                         option |= OPT_OTPBLK1_LOCK
