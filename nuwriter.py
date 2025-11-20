@@ -1,4 +1,5 @@
 # NOTE: This script is test under Python 3.x
+# -*- coding: utf-8 -*-
 
 __copyright__ = "Copyright (C) 2020~2021 Nuvoton Technology Corp. All rights reserved"
 __version__ = "v0.37"
@@ -1205,7 +1206,7 @@ def __attach(dev, ini_data, xusb_data, in_sram) -> int:
     return 0
 
 
-def __get_info(dev, data) -> int:
+def __get_info(dev, data, pdid) -> int:
     try:
         info = dev.get_info(data)
     except usb.core.USBError as err:
@@ -1215,8 +1216,8 @@ def __get_info(dev, data) -> int:
                               'page_per_blk page_size blk_cnt bad_clk_cnt oob_size usr_cfg0 spi_id usr_cfg1 quad_cmd \
                               read_sts_cmd write_sts_cmd sts_val dummy_byte blk rsv use_cfg2 snand_id snand_page_size \
                               snand_oob snand_quad_cmd snand_read_sts_cmd snand_write_sts_cmd snand_sts_val \
-                              snand_dummy_byte snand_blk_cnt snand_page_per_blk led_port led_pin led_on led_off')
-    info_struct = _info_struct._make(unpack('<IIIIIIIIBBBBIIIIIHHBBBBIIIBBBB', info))
+                              snand_dummy_byte snand_blk_cnt snand_page_per_blk led_port led_pin led_on led_off pdid')
+    info_struct = _info_struct._make(unpack('<IIIIIIIIBBBBIIIIIHHBBBBIIIBBBBI', info))
     text = "\n==== NAND ====\n"
     text += "Page per block: " + str(info_struct.page_per_blk) + "\n"
     text += "Page size: " + str(info_struct.page_size) + "\n"
@@ -1252,6 +1253,9 @@ def __get_info(dev, data) -> int:
     text += "Page per block: " + str(info_struct.snand_page_per_blk) + "\n"
     
     print(text)
+
+    if pdid != info_struct.pdid:
+        print("ddr image error")
 
     dev.set_align(info_struct.page_size * info_struct.page_per_blk,
                   info_struct.snand_page_size * info_struct.snand_page_per_blk, 
@@ -1360,7 +1364,7 @@ def do_nuwriter(media, start, image_file_name, option=OPT_NONE) -> None:
     _XUsbComListNew = XUsbComList(attach_all=mp_mode)
     devices = _XUsbComListNew.get_dev()
 
-    data = bytearray(80)
+    data = bytearray(84)
     # default SOM LED is PJ15
     data[76] = 9
     data[77] = 15
@@ -1435,7 +1439,7 @@ def do_nuwriter(media, start, image_file_name, option=OPT_NONE) -> None:
         print("Device not found")
         sys.exit(2)
     with ThreadPoolExecutor(max_workers=8) as executor:
-        futures = [executor.submit(__get_info, dev, data) for dev in devices]
+        futures = [executor.submit(__get_info, dev, data, 0) for dev in devices]
 
     success = 0
     failed = 0
@@ -1447,6 +1451,45 @@ def do_nuwriter(media, start, image_file_name, option=OPT_NONE) -> None:
 
     print(f"Successfully get info from {success} device(s)")
 
+
+def load_mapping(file_path):
+    mapping = {}
+    if not os.path.exists(file_path):
+        print(f"No mapping file {file_path}")
+        return mapping
+
+    with open(file_path, "r", encoding="utf-8") as f:
+        for line in f:
+            line = line.strip()
+            if not line or line.startswith("#"):
+                continue
+            try:
+                filename, pdid = line.split(",")
+                mapping[filename.strip()] = int(pdid.strip())
+            except ValueError:
+                print(f"format error {line}")
+    return mapping
+
+def check_filename(mapping, filename):
+    filename = os.path.basename(filename)
+    #print(f"input: {filename}")
+    if not filename:
+        print("No filename")
+        return
+
+    name, ext = os.path.splitext(filename)
+    if ext.lower() != ".bin":
+        print("error: not .bin")
+        return
+
+    pdid = mapping.get(filename)
+    if pdid is None:
+        #print("No mapping pdid")
+        return 0
+    else:
+        #print(f"filename: {filename}")
+        #print(f"pdid = {pdid}")
+        return pdid
 
 def do_attach(ini_file_name, option=OPT_NONE) -> int:
     global mp_mode
@@ -1466,6 +1509,13 @@ def do_attach(ini_file_name, option=OPT_NONE) -> int:
         print(f"Cannot find {ini_file_name}")
         sys.exit(3)
     try:
+        if os.path.isdir("ddrimg"):
+            pdid_map = load_mapping("ddrimg\\mapping.txt")
+        else:
+            pdid_map = load_mapping("..\\ddrimg\\mapping.txt")
+        
+        if pdid_map:
+            pdid = check_filename(pdid_map, ini_file_name)
         with open(init_location, "rb") as ini_file:
             ini_data = ini_file.read()
     except (IOError, OSError) as err:
@@ -1535,7 +1585,7 @@ def do_attach(ini_file_name, option=OPT_NONE) -> int:
     _XUsbComListNew = XUsbComList(attach_all=mp_mode)
     devices = _XUsbComListNew.get_dev()
 
-    data = bytearray(80)
+    data = bytearray(84)
     # default SOM LED is PJ15
     data[76] = 9
     data[77] = 15
@@ -1610,7 +1660,7 @@ def do_attach(ini_file_name, option=OPT_NONE) -> int:
         print("Device not found")
         sys.exit(2)
     with ThreadPoolExecutor(max_workers=8) as executor:
-        futures = [executor.submit(__get_info, dev, data) for dev in devices]
+        futures = [executor.submit(__get_info, dev, data, pdid) for dev in devices]
 
     success = 0
     failed = 0

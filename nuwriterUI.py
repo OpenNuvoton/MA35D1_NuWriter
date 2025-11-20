@@ -33,7 +33,7 @@ from gui.generatePCFG import PCFG_MainPage
 
 from gui.progress import ProgressDialog 
 
-Version = "v1.03"
+Version = "v1.04"
 
 class EmittingStream(QtCore.QObject):
 
@@ -258,7 +258,10 @@ class Ui(QtWidgets.QMainWindow, Ui_MainWindow):
         reply = QtWidgets.QMessageBox.about(self,'License',' NuWriterGUI Version: ' + Version + '\n\n NuWriterGUI is based on pyQt5 ')
     
     def showManual(self):
-        manual_path = os.path.join("..", "UM_EN_MA35_NuWriter.pdf")
+        if os.path.exists("UM_EN_MA35_NuWriter.pdf"):
+            manual_path = "UM_EN_MA35_NuWriter.pdf"
+        else:
+            manual_path = os.path.join("..", "UM_EN_MA35_NuWriter.pdf")
         open_new(manual_path)
     
     def showProgress(self):
@@ -532,6 +535,9 @@ class Ui(QtWidgets.QMainWindow, Ui_MainWindow):
             text = ""
         if text.startswith("Successfully") or text.startswith("Failed"):
             text = "\n" + text
+        if "ddr image error" in text:
+            reply = QtWidgets.QMessageBox.about(self, 'Warning',' DDR Image Mismatch! Please check readme.txt in ddrimg folder!')
+            
         self.text_browser.insertPlainText(text)
         self.text_browser.moveCursor(QtGui.QTextCursor.End)
 
