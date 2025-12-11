@@ -553,10 +553,10 @@ class Ui_MainWindow(object):
         self.actionDev.setText(_translate("MainWindow", "Develop mode"))
         self.actionMP.setText(_translate("MainWindow", "Mass Production mode"))
         self.actionCT.setText(_translate("MainWindow", "Custom DDR mode"))
-        self.actionHelp.setText(_translate("MainWindow", "About"))
-        self.actionLicense.setText(_translate("MainWindow", "License"))
+        self.actionHelp.setText(_translate("MainWindow", "Help"))
+        self.actionLicense.setText(_translate("MainWindow", "About"))
         self.actionOptions.setText(_translate("MainWindow", "Options"))
-        self.actionAbout.setText(_translate("MainWindow", "About"))
+        self.actionAbout.setText(_translate("MainWindow", "Help Contents"))
 import nuvoton_rc
 
 

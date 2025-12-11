@@ -22,7 +22,7 @@ from nuwriter import (DEV_DDR_SRAM, DEV_NAND, DEV_OTP, DEV_SD_EMMC,
         OPT_OTPBLK1, OPT_OTPBLK2, OPT_OTPBLK3, OPT_OTPBLK4, OPT_OTPBLK5, OPT_OTPBLK6, OPT_OTPBLK7,
         do_attach, do_convert, do_nuwriter, do_pack, do_stuff, do_txt_convert, do_unpack, 
         do_img_erase, do_img_program, do_img_read, do_otp_program, do_otp_erase, do_otp_read, do_otp_convert,
-        do_pack_program, do_msc, switch_mp_mode)        
+        do_pack_program, do_msc, switch_mp_mode, mp_mode)        
 
 from mainwindow import Ui_MainWindow
 from gui.mediaPages import MediaPage
@@ -33,7 +33,7 @@ from gui.generatePCFG import PCFG_MainPage
 
 from gui.progress import ProgressDialog 
 
-Version = "v1.04"
+Version = "v1.08"
 
 class EmittingStream(QtCore.QObject):
 
@@ -148,6 +148,7 @@ class Ui(QtWidgets.QMainWindow, Ui_MainWindow):
         self.dev_mode = False
         self.otp_mode = False
         self.ct_mode = False
+        self.mass_mode = False
         
         self.tabWidget.setTabVisible(1,self.dev_mode)
         self.tabWidget.setTabVisible(2,self.dev_mode)
@@ -179,7 +180,7 @@ class Ui(QtWidgets.QMainWindow, Ui_MainWindow):
         self.actionLicense.triggered.connect(self.showLicense)
         self.actionAbout.triggered.connect(self.showManual)
         
-        self.actionCheckUpdate = QtWidgets.QAction("Update Check", self)
+        self.actionCheckUpdate = QtWidgets.QAction("Check for Updates", self)
         self.menuAbout.addAction(self.actionCheckUpdate)
    
         self.actionCheckUpdate.triggered.connect(self.checkForUpdates_manual)
@@ -246,6 +247,7 @@ class Ui(QtWidgets.QMainWindow, Ui_MainWindow):
         
     def mp_mode_check(self):
         switch_mp_mode(True)
+        self.mass_mode = not self.mass_mode
         
     def ct_mode_check(self):
         self.ct_mode = not self.ct_mode
@@ -255,7 +257,7 @@ class Ui(QtWidgets.QMainWindow, Ui_MainWindow):
         self.groupBox_a1.setVisible(not self.ct_mode)
 
     def showLicense(self):
-        reply = QtWidgets.QMessageBox.about(self,'License',' NuWriterGUI Version: ' + Version + '\n\n NuWriterGUI is based on pyQt5 ')
+        reply = QtWidgets.QMessageBox.about(self,'About',' NuWriterGUI Version: ' + Version + '\n\n NuWriterGUI is based on pyQt5 ')
     
     def showManual(self):
         if os.path.exists("UM_EN_MA35_NuWriter.pdf"):
@@ -544,6 +546,12 @@ class Ui(QtWidgets.QMainWindow, Ui_MainWindow):
     def progressOutputWritten(self, raw_text):
         try:
             ANSI_RE = re.compile(r'\x1B\[[0-?]*[ -/]*[@-~]')
+            
+            cleaned = ANSI_RE.sub('', raw_text)
+            
+            if not cleaned or cleaned in ('\n', '\r\n'):
+                return
+                
             BAR_PCK_RE = re.compile(
                 r'''
                     ^device\s+
@@ -576,7 +584,7 @@ class Ui(QtWidgets.QMainWindow, Ui_MainWindow):
             bar_pck_m = BAR_PCK_RE.match(text) 
             bar_m = BAR_RE.match(text)
             
-            if bar_pck_m:
+            if bar_pck_m and self.mass_mode:
                 phase = bar_pck_m['action'].strip()
                 pos = int(bar_pck_m['dev']) + 1
                 pct = int(bar_pck_m['pct'])
@@ -586,7 +594,8 @@ class Ui(QtWidgets.QMainWindow, Ui_MainWindow):
                     self.showProgress()
                 self.Progress_window.updateRequested.emit(phase, pos, pct, img_i, img_x)
                 return
-            elif bar_m:
+                
+            elif bar_m and self.mass_mode:
                 phase = bar_m['action'].strip()
                 pos = int(bar_m['dev']) + 1
                 pct = int(bar_m['pct'])
@@ -595,59 +604,139 @@ class Ui(QtWidgets.QMainWindow, Ui_MainWindow):
                 self.Progress_window.updateRequested.emit(phase, pos, pct, 0, 0)
                 return
                 
+            if '\r' in cleaned and '\n' not in cleaned:
+                last = cleaned.split('\r')[-1]
+                if last.strip():
+                    self._replace_last_line(last)
+                return
+                
+            text = cleaned    
             if text.startswith("Successfully") or text.startswith("Failed"):
                 text = "\n" + text
+                
             self.text_browser.insertPlainText(text)
             self.text_browser.moveCursor(QtGui.QTextCursor.End)
+            
         except Exception as e:
             print("Error checking for updates:", e)
 
+    def _replace_last_line(self, new_text: str):
+        cursor = self.text_browser.textCursor()
+        cursor.movePosition(QtGui.QTextCursor.End)
+        cursor.movePosition(QtGui.QTextCursor.StartOfLine, QtGui.QTextCursor.KeepAnchor)
+        cursor.removeSelectedText()
+        cursor.insertText(new_text)
+        self.text_browser.setTextCursor(cursor)
+        
     def iniBrowseDDR(self):
         filename = ""
-        # Fix for crash in X on Ubuntu 14.04
-        filename, _ = QtWidgets.QFileDialog.getOpenFileName(filter = "bin(*.bin)")
+        current_text = self.ddrFileLineEdit.text()
+        if os.path.isfile(current_text):
+            start_dir = os.path.dirname(current_text)
+        else:
+            start_dir = ""
+        filename, _ = QtWidgets.QFileDialog.getOpenFileName(
+            self,
+            "Select DDR bin file",
+            start_dir,
+            "bin(*.bin)"
+        )
         if filename != "":
             self.ddrFileLineEdit.setText(filename)
             
     def iniBrowseInfo(self):
         filename = ""
-        # Fix for crash in X on Ubuntu 14.04
-        filename, _ = QtWidgets.QFileDialog.getOpenFileName(filter = "json(*.json)")
+        current_text = self.InfoFileLineEdit.text()
+        if os.path.isfile(current_text):
+            start_dir = os.path.dirname(current_text)
+        else:
+            start_dir = ""
+        filename, _ = QtWidgets.QFileDialog.getOpenFileName(
+            self,
+            "Select info json file",
+            start_dir,
+            "json(*.json)"
+        )
         if filename != "":
             self.InfoFileLineEdit.setText(filename)
             
     def iniBrowseCTDDR(self):
         filename = ""
-        # Fix for crash in X on Ubuntu 14.04
-        filename, _ = QtWidgets.QFileDialog.getOpenFileName(filter = "txt(*.txt)")
+        current_text = self.CTddrFileLineEdit.text()
+        if os.path.isfile(current_text):
+            start_dir = os.path.dirname(current_text)
+        else:
+            start_dir = ""
+        filename, _ = QtWidgets.QFileDialog.getOpenFileName(
+            self,
+            "Select CTDDR text file",
+            start_dir,
+            "txt(*.txt)"
+        )
         if filename != "":
             self.CTddrFileLineEdit.setText(filename)
     
     def iniBrowseCCFG(self):
         filename = ""
-        # Fix for crash in X on Ubuntu 14.04
-        filename, _ = QtWidgets.QFileDialog.getOpenFileName(filter = "json(*.json)")
+        current_text = self.ccfgFileLineEdit.text()
+        if os.path.isfile(current_text):
+            start_dir = os.path.dirname(current_text)
+        else:
+            start_dir = ""
+        filename, _ = QtWidgets.QFileDialog.getOpenFileName(
+            self,
+            "Select CCFG json file",
+            start_dir,
+            "json(*.json)"
+        )
         if filename != "":
             self.ccfgFileLineEdit.setText(filename)
     
     def iniBrowseCJSON(self):
         filename = ""
-        # Fix for crash in X on Ubuntu 14.04
-        filename, _ = QtWidgets.QFileDialog.getOpenFileName(filter = "json(*.json)")
+        current_text = self.cjsonFileLineEdit.text()
+        if os.path.isfile(current_text):
+            start_dir = os.path.dirname(current_text)
+        else:
+            start_dir = ""
+        filename, _ = QtWidgets.QFileDialog.getOpenFileName(
+            self,
+            "Select CJSON json file",
+            start_dir,
+            "json(*.json)"
+        )
         if filename != "":
             self.cjsonFileLineEdit.setText(filename)
             
     def iniBrowsePCFG(self):
         filename = ""
-        # Fix for crash in X on Ubuntu 14.04
-        filename, _ = QtWidgets.QFileDialog.getOpenFileName(filter = "json(*.json)")
+        current_text = self.pcfgFileLineEdit.text()
+        if os.path.isfile(current_text):
+            start_dir = os.path.dirname(current_text)
+        else:
+            start_dir = ""
+        filename, _ = QtWidgets.QFileDialog.getOpenFileName(
+            self,
+            "Select PCFG json file",
+            start_dir,
+            "json(*.json)"
+        )
         if filename != "":
             self.pcfgFileLineEdit.setText(filename)
             
     def iniBrowseUPCFG(self):
         filename = ""
-        # Fix for crash in X on Ubuntu 14.04
-        filename, _ = QtWidgets.QFileDialog.getOpenFileName(filter = "bin(*.bin)")
+        current_text = self.upcfgFileLineEdit.text()
+        if os.path.isfile(current_text):
+            start_dir = os.path.dirname(current_text)
+        else:
+            start_dir = ""
+        filename, _ = QtWidgets.QFileDialog.getOpenFileName(
+            self,
+            "Select UPCFG bin file",
+            start_dir,
+            "bin(*.bin)"
+        )
         if filename != "":
             self.upcfgFileLineEdit.setText(filename)
            

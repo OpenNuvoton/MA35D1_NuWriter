@@ -139,8 +139,16 @@ class ConfigHeaderOption(QWidget):
         
     def CCFG_image_file_browse(self, i):
         filename = ""
-        # Fix for crash in X on Ubuntu 14.04
-        filename, _ = QFileDialog.getOpenFileName()
+        current_text = self.CCFG_headeropt_image_file[i].text()
+        if os.path.isfile(current_text):
+            start_dir = os.path.dirname(current_text)
+        else:
+            start_dir = ""
+        filename, _ = QFileDialog.getOpenFileName(
+            self,
+            "Select CCFG image file",
+            start_dir
+        )
         if filename != "":
             self.CCFG_headeropt_image_file[i].setText(filename)
    

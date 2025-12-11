@@ -1254,7 +1254,7 @@ def __get_info(dev, data, pdid) -> int:
     
     print(text)
 
-    if pdid != info_struct.pdid:
+    if pdid != info_struct.pdid and info_struct.pdid != 0:
         print("ddr image error")
 
     dev.set_align(info_struct.page_size * info_struct.page_per_blk,

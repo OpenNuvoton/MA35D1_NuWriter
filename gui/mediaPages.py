@@ -495,16 +495,33 @@ class MediaPage(QWidget):
 
     def pathBrowse(self):
         filename = ""
-        # Fix for crash in X on Ubuntu 14.04
-        filename, _ = QtWidgets.QFileDialog.getOpenFileName()
+        current_text = self.imgPathLine.text()
+        if os.path.isfile(current_text):
+            start_dir = os.path.dirname(current_text)
+        else:
+            start_dir = ""
+        filename, _ = QtWidgets.QFileDialog.getOpenFileName(
+            self,
+            "Select image path",
+            start_dir
+        )
 
         if filename != "":
             self.imgPathLine.setText(filename)
     
     def pathBrowseOTP(self):
         filename = ""
-        # Fix for crash in X on Ubuntu 14.04
-        filename, _ = QtWidgets.QFileDialog.getOpenFileName(filter = "json(*.json);;bin(*.bin)")
+        current_text = self.imgPathLine.text()
+        if os.path.isfile(current_text):
+            start_dir = os.path.dirname(current_text)
+        else:
+            start_dir = ""
+        filename, _ = QtWidgets.QFileDialog.getOpenFileName(
+            self,
+            "Select image path",
+            start_dir,
+            "json(*.json);;bin(*.bin)"
+        )
 
         if filename != "":
             self.imgPathLine.setText(filename)
