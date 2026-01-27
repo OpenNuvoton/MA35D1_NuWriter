@@ -166,9 +166,9 @@ class MediaPage(QWidget):
         self.mainLayout.addWidget(writeGroup)
 
         # Write Button
-        writeButton = QPushButton('Write')
-        writeButton.clicked.connect(self.writeMedia)
-        self.buttonLayout.addWidget(writeButton)
+        self.writeButton = QPushButton('Write')
+        self.writeButton.clicked.connect(self.writeMedia)
+        self.buttonLayout.addWidget(self.writeButton)
     
     def addWriteOTPArgument(self):
 
@@ -195,9 +195,9 @@ class MediaPage(QWidget):
         self.mainLayout.addWidget(writeGroup)
 
         # Write Button
-        writeButton = QPushButton('Write')
-        writeButton.clicked.connect(self.warning_writeOTPMedia)
-        self.buttonLayout.addWidget(writeButton)
+        self.writeButton = QPushButton('Write')
+        self.writeButton.clicked.connect(self.warning_writeOTPMedia)
+        self.buttonLayout.addWidget(self.writeButton)
     
     
     def addReadArgument(self):
@@ -235,9 +235,9 @@ class MediaPage(QWidget):
         self.mainLayout.addWidget(group)
 
         # Read Button
-        readButton = QPushButton('Read')
-        readButton.clicked.connect(self.readMedia)
-        self.buttonLayout.addWidget(readButton)
+        self.readButton = QPushButton('Read')
+        self.readButton.clicked.connect(self.readMedia)
+        self.buttonLayout.addWidget(self.readButton)
     
     def addReadOTPArgument(self):
         group = QGroupBox("Read")
@@ -272,9 +272,9 @@ class MediaPage(QWidget):
         self.mainLayout.addWidget(group)
 
         # Read Button
-        readButton = QPushButton('Read')
-        readButton.clicked.connect(self.readOTPMedia)
-        self.buttonLayout.addWidget(readButton)
+        self.readButton = QPushButton('Read')
+        self.readButton.clicked.connect(self.readOTPMedia)
+        self.buttonLayout.addWidget(self.readButton)
         
     def addEraseArgument(self):
         group = QGroupBox("Erase")
@@ -298,9 +298,9 @@ class MediaPage(QWidget):
         self.mainLayout.addWidget(group)
 
         # Erase Button
-        eraseButton = QPushButton('Erase')
-        eraseButton.clicked.connect(self.eraseMedia)
-        self.buttonLayout.addWidget(eraseButton)
+        self.eraseButton = QPushButton('Erase')
+        self.eraseButton.clicked.connect(self.eraseMedia)
+        self.buttonLayout.addWidget(self.eraseButton)
         '''
     def addEraseOTPArgument(self):
         group = QGroupBox("Erase")
@@ -411,13 +411,15 @@ class MediaPage(QWidget):
 
             if self.verifyWrite.isChecked():
                 _option = OPT_VERIFY
-
+                
+        self.button_setable(False)
         self.signalImgProgram.emit(_media, _address , _file, _option, _ispack)
     
     def writeOTPMedia(self):
         _file = self.imgPathLine.text()
         _media = self._media
         
+        self.button_setable(False)
         self.signalImgProgram.emit(_media, '0' , _file, OPT_NONE, False)
 
     def readMedia(self):
@@ -432,6 +434,7 @@ class MediaPage(QWidget):
         if _media in [DEV_NAND, DEV_SPINAND] and self.readWithBad.isChecked():
             _option = OPT_WITHBAD
 
+        self.button_setable(False)
         self.signalImgRead.emit(_media, _start , _file, _end, _option, _isall)
             
     def readOTPMedia(self):
@@ -461,6 +464,7 @@ class MediaPage(QWidget):
         if not(_isall):
             _option |= option_index.get(_start)
 
+        self.button_setable(False)
         self.signalImgRead.emit(_media, _start , _file, _end, _option, _isall)  
 
     def eraseMedia(self):
@@ -468,6 +472,8 @@ class MediaPage(QWidget):
         _end = self.eraseEnd.text()
         _media = self._media
         _isall = self.eraseAll.isChecked()
+        
+        self.button_setable(False)
         self.signalImgErase.emit(_media, _start , _end, 0, _isall)
         
     def eraseOTPMedia(self):
@@ -479,6 +485,8 @@ class MediaPage(QWidget):
             _option = 0x400
         elif self.eraseOTP4.isChecked():
             _option = 0x800
+            
+        self.button_setable(False)
         self.signalImgErase.emit(_media, '0' , '0', _option, False)
         '''
     def storageMSC(self):
@@ -492,7 +500,14 @@ class MediaPage(QWidget):
 
         self.signalMscStorage.emit(mscSize , option)
         '''
-
+    def button_setable(self, st):
+        if hasattr(self, 'writeButton'): 
+            self.writeButton.setEnabled(st)
+        if hasattr(self, 'readButton'): 
+            self.readButton.setEnabled(st)
+        if hasattr(self, 'eraseButton'): 
+            self.eraseButton.setEnabled(st)
+        
     def pathBrowse(self):
         filename = ""
         current_text = self.imgPathLine.text()

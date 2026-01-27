@@ -33,7 +33,7 @@ from gui.generatePCFG import PCFG_MainPage
 
 from gui.progress import ProgressDialog 
 
-Version = "v1.08"
+Version = "v1.09"
 
 class EmittingStream(QtCore.QObject):
 
@@ -895,7 +895,8 @@ class Ui(QtWidgets.QMainWindow, Ui_MainWindow):
     def doImgRead(self, media, startStr, fileStr, lengthStr, option, isall=False):
         
         if fileStr == "":
-            print(f'Save File missing!')
+            print(f'Save File missing!\n')
+            self.unlock_media_button()
             return
         
         if isall:
@@ -908,18 +909,21 @@ class Ui(QtWidgets.QMainWindow, Ui_MainWindow):
             try:
                 start = int(startStr, 16) & 0xffffffff
             except:
-                print(f'Range Setting missing!')
+                print(f'Range Setting missing!\n')
+                self.unlock_media_button()
                 return
 
             try:
                 length = (int(lengthStr, 16) & 0xffffffff) - start
             except:
-                print(f'Range Setting missing!')
+                print(f'Range Setting missing!\n')
+                self.unlock_media_button()
                 return                
 
-
         self.text_browser.clear()
-            
+        
+        if length == 0:
+            print(f'Read All since range = 0\n')            
 
         if media in [DEV_DDR_SRAM, DEV_NAND, DEV_SPINOR, DEV_SPINAND, DEV_OTP, DEV_SD_EMMC]:
 
@@ -958,6 +962,7 @@ class Ui(QtWidgets.QMainWindow, Ui_MainWindow):
         else:
             worker = Worker(do_img_read, media, start, fileStr, length, option)
         # Execute
+        worker.signals.finished.connect(self.unlock_media_button)
         self.threadpool.start(worker)
 
     # def do_img_program(media, start, image_file_name, option=OPT_NONE) -> None:
@@ -965,10 +970,12 @@ class Ui(QtWidgets.QMainWindow, Ui_MainWindow):
     def doImgProgram(self, media, startStr, image_file_name, option, ispack=False):
 
         if image_file_name == "" and media == DEV_OTP:
-            print(f'OTP File missing!')
+            print(f'OTP File missing!\n')
+            self.unlock_media_button()
             return
         elif image_file_name == "":
-            print(f'Image File missing!')
+            print(f'Image File missing!\n')
+            self.unlock_media_button()
             return 
 
         try:
@@ -1030,7 +1037,7 @@ class Ui(QtWidgets.QMainWindow, Ui_MainWindow):
         else:
             # print(f'do_img_program({media}, {start}, {image_file_name}, {option})')
             worker = Worker(do_img_program, media, start, image_file_name, option)
-
+        worker.signals.finished.connect(self.unlock_media_button)
         # Execute
         self.threadpool.start(worker)
 
@@ -1046,13 +1053,15 @@ class Ui(QtWidgets.QMainWindow, Ui_MainWindow):
             try:
                 start = int(startStr, 16) & 0xffffffff
             except:
-                print(f'Range Setting missing!')
+                print(f'Range Setting missing!\n')
+                self.unlock_media_button()
                 return
 
             try:
                 length = (int(lengthStr, 16) & 0xffffffff) - start
             except:
-                print(f'Range Setting missing!')
+                print(f'Range Setting missing!\n')
+                self.unlock_media_button()
                 return
 
         self.text_browser.clear()
@@ -1085,7 +1094,7 @@ class Ui(QtWidgets.QMainWindow, Ui_MainWindow):
             worker = Worker(do_otp_erase, option)
         else:
             worker = Worker(do_img_erase, media, start, length, option)
-
+        worker.signals.finished.connect(self.unlock_media_button)
         # Execute
         self.threadpool.start(worker)
 
@@ -1120,9 +1129,16 @@ class Ui(QtWidgets.QMainWindow, Ui_MainWindow):
         # Execute
         self.threadpool.start(worker)
     '''
+    def unlock_media_button(self):
+        self.ddrPage.button_setable(True)
+        self.nandPage.button_setable(True)
+        self.sdEmmcPage.button_setable(True)
+        self.spiNorPage.button_setable(True)
+        self.spiNandPage.button_setable(True)
+        self.otpPage.button_setable(True)
+
   
 class WorkerSignals(QObject):
-
     finished = QtCore.pyqtSignal()
   
 class Worker(QRunnable):
@@ -1133,7 +1149,6 @@ class Worker(QRunnable):
         self.fn = fn
         self.args = args
         self.kwargs = kwargs
-        
         self.signals = WorkerSignals()
 
     @QtCore.pyqtSlot()

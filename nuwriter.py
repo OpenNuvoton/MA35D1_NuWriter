@@ -589,6 +589,10 @@ def __img_erase(dev, media, start, length, option) -> int:
         print("Starting address must be block aligned")
         return -1
 
+    if (length != 0) and (length < npage):
+        print("erase length less than one page")
+        return -1
+
     cmd = start.to_bytes(8, byteorder='little')
     cmd += length.to_bytes(8, byteorder='little')
     cmd += ACT_ERASE.to_bytes(4, byteorder='little')
@@ -1568,7 +1572,7 @@ def do_attach(ini_file_name, option=OPT_NONE) -> int:
         else:
             failed += 1
 
-    print(f"Successfully attached {success} device(s)")
+    #print(f"Successfully attached {success} device(s)")
     if failed > 0:
         print(f"Failed to attach {failed} device(s)")
         sys.exit(1)
