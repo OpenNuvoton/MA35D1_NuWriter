@@ -15,8 +15,8 @@ from webbrowser import open_new
 from PyQt5 import QtCore, QtGui, QtWidgets
 from PyQt5.QtCore import pyqtSignal, QObject, QRunnable, QThreadPool
 
-from nuwriter import (DEV_DDR_SRAM, DEV_NAND, DEV_OTP, DEV_SD_EMMC,
-        DEV_SPINAND, DEV_SPINOR, DEV_USBH, DEV_USBD, 
+from nuwriter import (DEV_DDR_SRAM, DEV_NAND, DEV_OTP, DEV_EMMC,
+        DEV_SPINAND, DEV_SPINOR, DEV_SD, DEV_USBD, 
         OPT_NONE, OPT_SCRUB, OPT_WITHBAD, OPT_EXECUTE, OPT_VERIFY, OPT_CONVOTP,
         OPT_UNPACK, OPT_RAW, OPT_EJECT, OPT_SETINFO, OPT_CONCAT, OPT_NOCRC, OPT_DDR_800, OPT_DDR_667,
         OPT_OTPBLK1, OPT_OTPBLK2, OPT_OTPBLK3, OPT_OTPBLK4, OPT_OTPBLK5, OPT_OTPBLK6, OPT_OTPBLK7,
@@ -372,9 +372,9 @@ class Ui(QtWidgets.QMainWindow, Ui_MainWindow):
         self.nandPage = MediaPage(DEV_NAND, self)
         self.tabMedia.addTab(self.nandPage, "NAND")
 
-        # DEV_SD_EMMC = 2
-        self.sdEmmcPage = MediaPage(DEV_SD_EMMC, self)
-        self.tabMedia.addTab(self.sdEmmcPage, "SD/EMMC")
+        # DEV_EMMC = 2
+        self.EmmcPage = MediaPage(DEV_EMMC, self)
+        self.tabMedia.addTab(self.EmmcPage, "SDHCI1")
 
         # DEV_SPINOR = 3
         self.spiNorPage = MediaPage(DEV_SPINOR, self)
@@ -387,6 +387,10 @@ class Ui(QtWidgets.QMainWindow, Ui_MainWindow):
         # DEV_OTP = 6
         self.otpPage = MediaPage(DEV_OTP, self)
         self.tabMedia.addTab(self.otpPage, "OTP")
+        
+        # DEV_SD = 7
+        self.sdPage = MediaPage(DEV_SD, self)
+        self.tabMedia.addTab(self.sdPage, "SDHCI0")
 
     def __del__(self):
         # Restore sys.stdout
@@ -443,7 +447,7 @@ class Ui(QtWidgets.QMainWindow, Ui_MainWindow):
 
         self.upcfgFileLineEdit.setText(self.conf.get('Unpack', 'Config File', fallback=''))
 
-        sections = ['DDR', 'NAND', 'SD', 'SPINOR', 'SPINAND', 'OTP', 'USBH']
+        sections = ['DDR', 'NAND', 'EMMC', 'SD', 'SPINOR', 'SPINAND', 'OTP', 'USBH']
 
         for section in sections:
             if not self.conf.has_section(section):
@@ -453,8 +457,10 @@ class Ui(QtWidgets.QMainWindow, Ui_MainWindow):
                 page = self.ddrPage
             elif section == 'NAND':
                 page = self.nandPage
+            elif section == 'EMMC':
+                page = self.EmmcPage
             elif section == 'SD':
-                page = self.sdEmmcPage
+                page = self.sdPage
             elif section == 'SPINOR':
                 page = self.spiNorPage
             elif section == 'SPINAND':
@@ -925,7 +931,7 @@ class Ui(QtWidgets.QMainWindow, Ui_MainWindow):
         if length == 0:
             print(f'Read All since range = 0\n')            
 
-        if media in [DEV_DDR_SRAM, DEV_NAND, DEV_SPINOR, DEV_SPINAND, DEV_OTP, DEV_SD_EMMC]:
+        if media in [DEV_DDR_SRAM, DEV_NAND, DEV_SPINOR, DEV_SPINAND, DEV_OTP, DEV_EMMC, DEV_SD]:
 
             if media == DEV_DDR_SRAM:
                 section = 'DDR'
@@ -937,6 +943,8 @@ class Ui(QtWidgets.QMainWindow, Ui_MainWindow):
                 section = 'SPINAND'
             elif media == DEV_OTP:
                 section = 'OTP'
+            elif media == DEV_EMMC:
+                section = 'EMMC'
             else:
                 section = 'SD'
 
@@ -994,7 +1002,7 @@ class Ui(QtWidgets.QMainWindow, Ui_MainWindow):
             elif option == 2:
                 self.conf.set(section, 'write option', "Execute")
 
-        elif media in [DEV_NAND, DEV_SPINOR, DEV_SPINAND, DEV_SD_EMMC]:
+        elif media in [DEV_NAND, DEV_SPINOR, DEV_SPINAND, DEV_EMMC, DEV_SD]:
 
             if media == DEV_NAND:
                 section = 'NAND'
@@ -1002,6 +1010,8 @@ class Ui(QtWidgets.QMainWindow, Ui_MainWindow):
                 section = 'SPINOR'
             elif media == DEV_SPINAND:
                 section = 'SPINAND'
+            elif media == DEV_EMMC:
+                section = 'EMMC'
             else:
                 section = 'SD'
 
@@ -1066,7 +1076,7 @@ class Ui(QtWidgets.QMainWindow, Ui_MainWindow):
 
         self.text_browser.clear()
 
-        if media in [DEV_NAND, DEV_SPINOR, DEV_SPINAND, DEV_OTP, DEV_SD_EMMC]:
+        if media in [DEV_NAND, DEV_SPINOR, DEV_SPINAND, DEV_OTP, DEV_EMMC, DEV_SD]:
 
             if media == DEV_NAND:
                 section = 'NAND'
@@ -1076,6 +1086,8 @@ class Ui(QtWidgets.QMainWindow, Ui_MainWindow):
                 section = 'SPINAND'
             elif media == DEV_OTP:
                 section = 'OTP'
+            elif media == DEV_EMMC:
+                section = 'EMMC'
             else:
                 section = 'SD'
 
@@ -1121,7 +1133,7 @@ class Ui(QtWidgets.QMainWindow, Ui_MainWindow):
 
         self.conf.write(open(self.iniFilePath, 'w', encoding='utf-8'))
 
-        media = DEV_SD_EMMC
+        media = DEV_EMMC
         # print(f'do_msc({media}, {reserve}, {option})')
 
         worker = Worker(do_msc, media, reserve, option)
@@ -1132,7 +1144,8 @@ class Ui(QtWidgets.QMainWindow, Ui_MainWindow):
     def unlock_media_button(self):
         self.ddrPage.button_setable(True)
         self.nandPage.button_setable(True)
-        self.sdEmmcPage.button_setable(True)
+        self.sdPage.button_setable(True)
+        self.EmmcPage.button_setable(True)
         self.spiNorPage.button_setable(True)
         self.spiNandPage.button_setable(True)
         self.otpPage.button_setable(True)

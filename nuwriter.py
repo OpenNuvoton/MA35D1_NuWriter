@@ -39,11 +39,11 @@ SPINOR_ALIGN = 4096
 # Storage device type
 DEV_DDR_SRAM = 0
 DEV_NAND = 1
-DEV_SD_EMMC = 2
+DEV_EMMC = 2
 DEV_SPINOR = 3
 DEV_SPINAND = 4
 DEV_OTP = 6
-DEV_USBH = 7
+DEV_SD = 7
 DEV_USBD = 8
 DEV_UNKNOWN = 0xFF
 
@@ -575,7 +575,7 @@ def conv_otp(opt_file_name) -> (bytearray, int):
 
 def __img_erase(dev, media, start, length, option) -> int:
 
-    nand_align, spinand_align, npage, nblock, nbcnt, noob, snpage, snblock, snbcnt, snoob, emmc_block = dev.get_align()
+    nand_align, spinand_align, npage, nblock, nbcnt, noob, snpage, snblock, snbcnt, snoob, emmc_blk, sd_blk = dev.get_align()
 
     if (media == DEV_NAND and nand_align == 0) or \
        (media == DEV_SPINAND and spinand_align == 0):
@@ -584,7 +584,7 @@ def __img_erase(dev, media, start, length, option) -> int:
 
     if (media == DEV_NAND and start % nand_align != 0) or\
        (media == DEV_SPINAND and start % spinand_align != 0) or \
-       (media == DEV_SD_EMMC and start % 512 != 0) or \
+       (media == DEV_EMMC and start % 512 != 0) or \
        (media == DEV_SPINOR and start % SPINOR_ALIGN != 0):
         print("Starting address must be block aligned")
         return -1
@@ -692,7 +692,7 @@ def do_otp_erase(option) -> None:
         data &= 0x3
     if option & 0x8000:
         data >>= 16
-    #print(f"Erase count state {hex(data)}")
+    print(f"Erase count state {hex(data)}")
 
     print(f"Successfully erased device(s)")
 
@@ -844,7 +844,7 @@ def do_otp_read(media, start, out_file_name, length=0x1, option=OPT_NONE) -> Non
 
 def __pack_program(dev, media, pack_image, option) -> int:
 
-    nand_align, spinand_align, npage, nblock, nbcnt, noob, snpage, snblock, snbcnt, snoob, emmc_block = dev.get_align()
+    nand_align, spinand_align, npage, nblock, nbcnt, noob, snpage, snblock, snbcnt, snoob, emmc_blk, sd_blk = dev.get_align()
     image_cnt = pack_image.img_count()
 
     if (media == DEV_NAND and nand_align == 0) or \
@@ -912,7 +912,7 @@ def __pack_program(dev, media, pack_image, option) -> int:
                 reset_bus_address(dev.get_bus(),dev.get_address())
                 dev_num = 0
                 
-            text = f"device {dev_num} Verifying {i}/{image_cnt}"
+            text = f"device {dev_num} Verifying {i+1}/{image_cnt}"
             bar = tqdm(total=img_length, position=dev_num, ascii=True, desc=text, bar_format='{l_bar}{bar:10}{bar:-10b}')
             while remain > 0:
                 ack = dev.read(4)
@@ -969,7 +969,7 @@ def do_pack_program(media, pack_file_name, option=OPT_NONE) -> int:
 
 def __img_program(dev, media, start, img_data, option) -> int:
 
-    nand_align, spinand_align, npage, nblock, nbcnt, noob, snpage, snblock, snbcnt, snoob, emmc_block = dev.get_align()
+    nand_align, spinand_align, npage, nblock, nbcnt, noob, snpage, snblock, snbcnt, snoob, emmc_blk, sd_blk = dev.get_align()
 
     if (media == DEV_NAND and nand_align == 0) or \
        (media == DEV_SPINAND and spinand_align == 0):
@@ -1125,9 +1125,9 @@ def do_img_read(media, start, out_file_name, length=0x1, option=OPT_NONE) -> Non
         return
     # Get real length for "read all"
     if length == 0:
-        nand_align, spinand_align, npage, nblock, nbcnt, noob, snpage, snblock, snbcnt, snoob, emmc_block = dev.get_align()
-        if (media == DEV_NAND and nbcnt == 0) or (media == DEV_SD_EMMC and emmc_block == 0) \
-           or (media == DEV_SPINAND and snbcnt == 0):
+        nand_align, spinand_align, npage, nblock, nbcnt, noob, snpage, snblock, snbcnt, snoob, emmc_blk, sd_blk = dev.get_align()
+        if (media == DEV_NAND and nbcnt == 0) or (media == DEV_EMMC and emmc_blk == 0) \
+           or (media == DEV_SD and sd_blk == 0) or (media == DEV_SPINAND and snbcnt == 0):
             print("Unable to get block count")
             return -1
         if media == DEV_NAND:
@@ -1142,8 +1142,10 @@ def do_img_read(media, start, out_file_name, length=0x1, option=OPT_NONE) -> Non
                 length = (snpage + snoob) * snblock * snbcnt
             else:
                 length = spinand_align * snbcnt
-        elif media == DEV_SD_EMMC:
-            length = emmc_block * 512;
+        elif media == DEV_EMMC:
+            length = emmc_blk * 512;
+        elif media == DEV_SD:
+            length = sd_blk * 512;
         print(length)
 
     bar = tqdm(total=length, ascii=True, bar_format='{l_bar}{bar:10}{bar:-10b}')
@@ -1218,7 +1220,7 @@ def __get_info(dev, data, pdid) -> int:
 
     _info_struct = namedtuple('_info_struct',
                               'page_per_blk page_size blk_cnt bad_clk_cnt oob_size usr_cfg0 spi_id usr_cfg1 quad_cmd \
-                              read_sts_cmd write_sts_cmd sts_val dummy_byte blk rsv use_cfg2 snand_id snand_page_size \
+                              read_sts_cmd write_sts_cmd sts_val dummy_byte blk1 blk0 use_cfg2 snand_id snand_page_size \
                               snand_oob snand_quad_cmd snand_read_sts_cmd snand_write_sts_cmd snand_sts_val \
                               snand_dummy_byte snand_blk_cnt snand_page_per_blk led_port led_pin led_on led_off pdid')
     info_struct = _info_struct._make(unpack('<IIIIIIIIBBBBIIIIIHHBBBBIIIBBBBI', info))
@@ -1240,8 +1242,8 @@ def __get_info(dev, data, pdid) -> int:
     text += "Dummy byte: " + str(info_struct.dummy_byte) + "\n"
     
     text += "==== eMMC ====" + "\n"
-    text += "Block: " + str(info_struct.blk) + "\n"
-    text += "Reserved: " + str(info_struct.rsv) + "\n"
+    text += "Block1: " + str(info_struct.blk1) + "\n"
+    text += "Block0: " + str(info_struct.blk0) + "\n"
 
     text += "==== SPI NAND ====" + "\n"
     text += "Is uer config: " + str(info_struct.use_cfg2) + "\n"
@@ -1265,7 +1267,7 @@ def __get_info(dev, data, pdid) -> int:
                   info_struct.snand_page_size * info_struct.snand_page_per_blk, 
                   info_struct.page_size, info_struct.page_per_blk, info_struct.blk_cnt, info_struct.oob_size,
                   info_struct.snand_page_size, info_struct.snand_page_per_blk,
-                  info_struct.snand_blk_cnt, info_struct.snand_oob, info_struct.blk)
+                  info_struct.snand_blk_cnt, info_struct.snand_oob, info_struct.blk1, info_struct.blk0)
 
     return 0
 
@@ -1514,10 +1516,10 @@ def do_attach(ini_file_name, option=OPT_NONE) -> int:
         sys.exit(3)
     try:
         if os.path.isdir("ddrimg"):
-            pdid_map = load_mapping("ddrimg\\mapping.txt")
+            pdid_map = load_mapping(os.path.join("ddrimg", "mapping.txt"))
         else:
-            pdid_map = load_mapping("..\\ddrimg\\mapping.txt")
-        
+            pdid_map = load_mapping(os.path.join("..", "ddrimg", "mapping.txt"))        
+
         if pdid_map:
             pdid = check_filename(pdid_map, ini_file_name)
         with open(init_location, "rb") as ini_file:
@@ -2531,13 +2533,12 @@ def get_media(media) -> int:
     return {
         'DDR': DEV_DDR_SRAM,
         'SRAM': DEV_DDR_SRAM,
-        'SD': DEV_SD_EMMC,
-        'EMMC': DEV_SD_EMMC,
+        'SD': DEV_SD,
+        'EMMC': DEV_EMMC,
         'NAND': DEV_NAND,
         'SPINAND': DEV_SPINAND,
         'SPINOR': DEV_SPINOR,
         'OTP': DEV_OTP,
-        'USBH': DEV_USBH,
         'USBD': DEV_USBD
     }.get(media, DEV_UNKNOWN)
 
@@ -2589,7 +2590,10 @@ def get_otpblock(num) -> int:
         'KEY2': OPT_OTPKEY2+OPT_OTPKEY,
         'KEY3': OPT_OTPKEY3+OPT_OTPKEY,
         'KEY4': OPT_OTPKEY4+OPT_OTPKEY,
-        'KEY5': OPT_OTPKEY5+OPT_OTPKEY
+        'KEY5': OPT_OTPKEY5+OPT_OTPKEY,
+        'KEY6': OPT_OTPKEY6+OPT_OTPKEY,
+        'KEY7': OPT_OTPKEY7+OPT_OTPKEY,
+        'KEY8': OPT_OTPKEY8+OPT_OTPKEY
     }.get(num, OPT_UNKNOWN)
 
 
@@ -2642,6 +2646,13 @@ def main():
         if not cfg_file:
             print("Please assign a DDR ini file")
             sys.exit(0)
+        # wait device ready
+        while True:
+            dev = usb.core.find(idVendor=0x0416, idProduct=0x5963)
+            if dev is not None:
+                break
+            time.sleep(1)
+
         if do_attach(cfg_file, option) > 0:
             sys.exit(1)
 
@@ -2815,8 +2826,8 @@ def main():
             sys.exit(0)
         media = get_media(args.storage[0])
         try:
-            if media not in [DEV_SD_EMMC]:
-                raise ValueError("Only support eMMC/SD")
+            if media not in [DEV_SD]:
+                raise ValueError("Only support SD")
             if option != OPT_NONE and option != OPT_EJECT:
                 raise ValueError("Unsupported option")
         except ValueError as err:

@@ -81,7 +81,7 @@ class XUsbCom:
         return self.address
 
     @staticmethod
-    def set_align(nand, spinand, npage, nblock, nbcnt, noob, snpage, snblock, snbcnt, snoob, emmc_block) -> None:
+    def set_align(nand, spinand, npage, nblock, nbcnt, noob, snpage, snblock, snbcnt, snoob, emmc_blk, sd_blk) -> None:
         # See if we need to overwrite existing json file.
         overwrite = False
         try:
@@ -119,7 +119,7 @@ class XUsbCom:
                     if snoob != int(cfg['spinand_oob']):
                         overwrite = True
                 elif key == 'emmc_block':
-                    if emmc_block != int(cfg['emmc_block']):
+                    if emmc_blk != int(cfg['emmc_block']):
                         overwrite = True
         except (IOError, OSError, json.decoder.JSONDecodeError) as err:
             overwrite = True
@@ -130,7 +130,7 @@ class XUsbCom:
                     new_key = {'nand_align': nand, 'spinand_align': spinand, \
                         'nand_page': npage, 'nand_block': nblock, 'nand_block_cnt': nbcnt, 'nand_oob': noob,\
                         'spinand_page': snpage, 'spinand_block': snblock, 'spinand_block_cnt': snbcnt,\
-                        'spinand_oob': snoob, 'emmc_block': emmc_block}
+                        'spinand_oob': snoob, 'emmc_block': emmc_blk, 'sd_block': sd_blk}
                     json.dump(new_key, json_file, indent = 4)
             except (IOError, OSError) as err:
                 print("Write .config failed. Please re-attach")
@@ -144,7 +144,7 @@ class XUsbCom:
         except (IOError, OSError, json.decoder.JSONDecodeError) as err:
             print("Open/parsing .config failed. Please re-attach")
             sys.exit(err)
-        nand_align = spinand_align = npage = nblock = nbcnt = noob = snpage = snblock = snbcnt = snoob = emmc_block = 0
+        nand_align = spinand_align = npage = nblock = nbcnt = noob = snpage = snblock = snbcnt = snoob = emmc_blk = sd_blk = 0
         for key in cfg.keys():
             if key == 'nand_align':
                 nand_align = int(cfg['nand_align'])
@@ -167,8 +167,10 @@ class XUsbCom:
             elif key == 'spinand_oob':
                 snoob = int(cfg['spinand_oob'])
             elif key == 'emmc_block':
-                emmc_block = int(cfg['emmc_block'])
-        return nand_align, spinand_align, npage, nblock, nbcnt, noob, snpage, snblock, snbcnt, snoob, emmc_block
+                emmc_blk = int(cfg['emmc_block'])
+            elif key == 'sd_block':
+                sd_blk = int(cfg['sd_block'])
+        return nand_align, spinand_align, npage, nblock, nbcnt, noob, snpage, snblock, snbcnt, snoob, emmc_blk, sd_blk
 
 
 class XUsbComList:
