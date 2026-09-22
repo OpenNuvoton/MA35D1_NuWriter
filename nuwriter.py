@@ -1260,7 +1260,7 @@ def __get_info(dev, data, pdid) -> int:
     
     print(text)
 
-    if pdid != info_struct.pdid and info_struct.pdid != 0:
+    if pdid != 0 and pdid != info_struct.pdid and info_struct.pdid != 0:
         print("ddr image error")
 
     dev.set_align(info_struct.page_size * info_struct.page_per_blk,
@@ -1491,7 +1491,7 @@ def check_filename(mapping, filename):
     pdid = mapping.get(filename)
     if pdid is None:
         #print("No mapping pdid")
-        return 0
+        return None
     else:
         #print(f"filename: {filename}")
         #print(f"pdid = {pdid}")
@@ -1500,6 +1500,7 @@ def check_filename(mapping, filename):
 def do_attach(ini_file_name, option=OPT_NONE) -> int:
     global mp_mode
 
+    pdid = None
     init_location = "missing"
     if os.path.exists(ini_file_name):  # default use the init file in current directory
         init_location = ini_file_name
@@ -1520,7 +1521,9 @@ def do_attach(ini_file_name, option=OPT_NONE) -> int:
         else:
             pdid_map = load_mapping(os.path.join("..", "ddrimg", "mapping.txt"))        
 
-        if pdid_map:
+        if os.path.basename(ini_file_name).lower() == "ddr_auto.bin":
+            pdid = 0
+        elif pdid_map:
             pdid = check_filename(pdid_map, ini_file_name)
         with open(init_location, "rb") as ini_file:
             ini_data = ini_file.read()
