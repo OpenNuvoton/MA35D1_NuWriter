@@ -24,13 +24,11 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from UnpackImage import UnpackImage
 from collections import namedtuple
 from struct import unpack
-from pkcs11_provider import PKCS11CryptoProvider
 import time
 import platform
 # for debug
 import usb.core
 import usb.util
-import getpass
 
 ACK = 0x55AA55AA
 TRANSFER_SIZE = 4096
@@ -1896,21 +1894,6 @@ def do_showhdr(cfg_file) -> None:
         print("")
     header_file.close()
 
-def create_crypto_provider(config_file, pin):
-    with open(config_file, "r", encoding="utf-8") as f:
-        config = json.load(f)
-
-    cfg = config["pkcs11"]
-    keys = cfg["keys"]
-
-    return PKCS11CryptoProvider(
-        library_path=cfg["library_path"],
-        token_label=cfg["token_label"],
-        user_pin=pin,
-        aes_key_label=keys["aes_key_label"],
-        ecdsa_private_key_label=keys["ecdsa_private_key_label"],
-        ecdsa_public_key_label=keys["ecdsa_public_key_label"],
-    )
 
 def do_convert(cfg_file, option=OPT_NONE) -> None:
     now = datetime.now()
@@ -1954,142 +1937,109 @@ def do_convert(cfg_file, option=OPT_NONE) -> None:
 
         out += b'\xFF' * 4  # Reserve 4 bytes for image count
 
-        provider = None
-        try:
-            # Generate key file if secure boot is enabled
+        # Generate key file if secure boot is enabled
+        if d["header"]["secureboot"] == 'yes':
+
+            try:
+                key_file = open(now.strftime("%m%d-%H%M%S%f") + "/header_key.txt", "w+")
+            except (IOError, OSError) as err:
+                print("Create key file failed")
+                shutil.rmtree(now.strftime("%m%d-%H%M%S%f"))
+                sys.exit(err)
+
+            if "aeskey" in d["header"]:
+                try:
+                    aeskey = bytes.fromhex(d["header"]["aeskey"])
+                except ValueError as err:
+                    sys.exit(err)
+            else:
+                aeskey = ''.join(['%x' % random.randrange(16) for _ in range(0, 64)])
+                aeskey = binascii.unhexlify(bytes(aeskey, 'utf-8'))
+            key_file.write("AES key:\n" + str.upper(aeskey.hex()))
+
+            if "ecdsakey" in d["header"]:
+                try:
+                    sk = ecdsa.SigningKey.from_string(bytes.fromhex(d["header"]["ecdsakey"]),
+                                                      curve=ecdsa.NIST256p,
+                                                      hashfunc=hashlib.sha256)
+                except ValueError as err:
+                    sys.exit(err)
+            else:
+                sk = ecdsa.SigningKey.generate(curve=ecdsa.NIST256p, hashfunc=hashlib.sha256)
+            key_file.write("\nECDSA private key:\n" + str.upper(sk.to_string().hex()))
+
+            vk = sk.verifying_key
+            key_file.write("\nECDSA public key:\n" + format(vk.pubkey.point.x(), 'X') +
+                           "\n" + format(vk.pubkey.point.y(), 'X') + "\n")
+
+            key_file.close()
+
+        img_cnt = len(d["header"]["image"])
+        if img_cnt > MAX_HEADER_IMG:
+            print("Can process 4 images in header max")
+            shutil.rmtree(now.strftime("%m%d-%H%M%S%f"))
+            sys.exit(2)
+
+        # Fill image information
+        for i in range(img_cnt):
+            img = d["header"]["image"][i]
+            try:
+                with open(img["file"], "rb") as img_file:
+                    data = img_file.read()
+                    # pack version
+                    img_file.seek(0, os.SEEK_END)
+                    file_size = img_file.tell()
+                    #print("file size : ", file_size)
+                    cnt = 0
+                    for j in range(4 - (file_size % 4)):
+                        data += b'\xff'
+                        cnt += 1
+                    data += b'\x20\x54\x56\x4e'  # NVT
+                    data += int(img["offset"], 0).to_bytes(4, byteorder="little")
+            except (IOError, OSError) as err:
+                print("Open image file failed")
+                shutil.rmtree(now.strftime("%m%d-%H%M%S%f"))
+                sys.exit(err)
+            try:
+                out += int(img["offset"], 0).to_bytes(4, byteorder="little")
+                out += int(img["loadaddr"], 0).to_bytes(4, byteorder="little")
+                imgsize = os.path.getsize(img["file"]) + 8 + cnt
+                out +=  imgsize.to_bytes(4, byteorder="little")
+                out += int(img["type"]).to_bytes(4, byteorder="little")
+            except ValueError as err:
+                shutil.rmtree(now.strftime("%m%d-%H%M%S%f"))
+                sys.exit(err)
+
             if d["header"]["secureboot"] == 'yes':
 
+                # Use CFB and each image is process independently, so call new() for every image
+                aes_enc = AES.new(aeskey, AES.MODE_CFB, b'\x00' * 16, segment_size=128)
+                data_out = aes_enc.encrypt(data)
+                # R & S
+                out += sk.sign(data_out)
+
+                # Write encrypt image
                 try:
-                    key_file = open(now.strftime("%m%d-%H%M%S%f") + "/header_key.txt", "w+")
+                    with open(now.strftime("%m%d-%H%M%S%f") + '/enc_' +
+                              os.path.basename(img["file"]), "wb") as enc_file:
+                        enc_file.write(data_out)
                 except (IOError, OSError) as err:
-                    print("Create key file failed")
+                    print("Create encrypt file failed")
                     shutil.rmtree(now.strftime("%m%d-%H%M%S%f"))
                     sys.exit(err)
 
-                if d["header"].get("keysource") == "pkcs11":
-                    pkcs11_config = d["header"].get("pkcs11")
-
-                    if not pkcs11_config:
-                        raise RuntimeError("Missing 'pkcs11' configuration in header.json")
-
-                    user_pin = getpass.getpass("OpenCryptoki User PIN: ")
-
-                    provider = PKCS11CryptoProvider(pkcs11_config, user_pin)
-                    provider.open()
-
-                    key_file.write("Key source: PKCS#11\n")
-                    key_file.write("AES key label: " + provider.get_aes_key_label() + "\n")
-                    key_file.write("ECDSA private key label: " + provider.get_ecdsa_private_key_label() + "\n")
-
-                    public_key = provider.get_public_key()
-                    x, y = provider.split_public_key(public_key)
-                    key_file.write("\nECDSA public key:\n" + x.hex().upper() + "\n" +
-                                   y.hex().upper() + "\n")
-
-                else:
-                    if "aeskey" in d["header"]:
-                        try:
-                            aeskey = bytes.fromhex(d["header"]["aeskey"])
-                        except ValueError as err:
-                            sys.exit(err)
-                    else:
-                        aeskey = ''.join(['%x' % random.randrange(16) for _ in range(0, 64)])
-                        aeskey = binascii.unhexlify(bytes(aeskey, 'utf-8'))
-                    key_file.write("AES key:\n" + str.upper(aeskey.hex()))
-
-                    if "ecdsakey" in d["header"]:
-                        try:
-                            sk = ecdsa.SigningKey.from_string(bytes.fromhex(d["header"]["ecdsakey"]),
-                                                              curve=ecdsa.NIST256p,
-                                                              hashfunc=hashlib.sha256)
-                        except ValueError as err:
-                            sys.exit(err)
-                    else:
-                        sk = ecdsa.SigningKey.generate(curve=ecdsa.NIST256p, hashfunc=hashlib.sha256)
-                    key_file.write("\nECDSA private key:\n" + str.upper(sk.to_string().hex()))
-
-                    vk = sk.verifying_key
-                    key_file.write("\nECDSA public key:\n" + format(vk.pubkey.point.x(), 'X') +
-                                   "\n" + format(vk.pubkey.point.y(), 'X') + "\n")
-
-                key_file.close()
-
-            img_cnt = len(d["header"]["image"])
-            if img_cnt > MAX_HEADER_IMG:
-                print("Can process 4 images in header max")
-                shutil.rmtree(now.strftime("%m%d-%H%M%S%f"))
-                sys.exit(2)
-
-            # Fill image information
-            for i in range(img_cnt):
-                img = d["header"]["image"][i]
+            else:
+                out += b'\xFF' * 64  # Just pack 0xFF if secure boot is disabled
+                # Write concat image
                 try:
-                    with open(img["file"], "rb") as img_file:
-                        data = img_file.read()
-                        # pack version
-                        img_file.seek(0, os.SEEK_END)
-                        file_size = img_file.tell()
-                        #print("file size : ", file_size)
-                        cnt = 0
-                        for j in range(4 - (file_size % 4)):
-                            data += b'\xff'
-                            cnt += 1
-                        data += b'\x20\x54\x56\x4e'  # NVT
-                        data += int(img["offset"], 0).to_bytes(4, byteorder="little")
+                    with open(now.strftime("%m%d-%H%M%S%f") + '/' +
+                              os.path.basename(img["file"]), "wb") as concat_file:
+                        concat_file.write(data)
                 except (IOError, OSError) as err:
-                    print("Open image file failed")
-                    shutil.rmtree(now.strftime("%m%d-%H%M%S%f"))
-                    sys.exit(err)
-                try:
-                    out += int(img["offset"], 0).to_bytes(4, byteorder="little")
-                    out += int(img["loadaddr"], 0).to_bytes(4, byteorder="little")
-                    imgsize = os.path.getsize(img["file"]) + 8 + cnt
-                    out +=  imgsize.to_bytes(4, byteorder="little")
-                    out += int(img["type"]).to_bytes(4, byteorder="little")
-                except ValueError as err:
+                    print("Create encrypt file failed")
                     shutil.rmtree(now.strftime("%m%d-%H%M%S%f"))
                     sys.exit(err)
 
-                if d["header"]["secureboot"] == 'yes':
-
-                    if d["header"].get("keysource") == "pkcs11":
-                        # Use CFB and each image is process independently, so call new() for every image
-                        data_out = provider.encrypt(data)
-                        signature = provider.sign(data_out)
-                        out += signature
-
-                    else:
-                        # Use CFB and each image is process independently, so call new() for every image
-                        aes_enc = AES.new(aeskey, AES.MODE_CFB, b'\x00' * 16, segment_size=128)
-                        data_out = aes_enc.encrypt(data)
-                        # R & S
-                        out += sk.sign(data_out)
-
-                    # Write encrypt image
-                    try:
-                        with open(now.strftime("%m%d-%H%M%S%f") + '/enc_' +
-                                  os.path.basename(img["file"]), "wb") as enc_file:
-                            enc_file.write(data_out)
-                    except (IOError, OSError) as err:
-                        print("Create encrypt file failed")
-                        shutil.rmtree(now.strftime("%m%d-%H%M%S%f"))
-                        sys.exit(err)
-
-                else:
-                    out += b'\xFF' * 64  # Just pack 0xFF if secure boot is disabled
-                    # Write concat image
-                    try:
-                        with open(now.strftime("%m%d-%H%M%S%f") + '/' +
-                                  os.path.basename(img["file"]), "wb") as concat_file:
-                            concat_file.write(data)
-                    except (IOError, OSError) as err:
-                        print("Create encrypt file failed")
-                        shutil.rmtree(now.strftime("%m%d-%H%M%S%f"))
-                        sys.exit(err)
-
-        finally:
-            if provider is not None:
-                provider.close()
 
         # Fill header length
         out[8:12] = int(len(out) - 8).to_bytes(4, byteorder="little")
